@@ -75,8 +75,10 @@ model CustomerProfile {
   city             String?
   postalCode       String?  @map("postal_code")
   // Sensitive; mask or encrypt at the API boundary.
-  nationalIdNumber String?  @map("national_id_number")
-  createdAt        DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  nationalIdNumber String?   @map("national_id_number")
+  kycStatus        KycStatus @default(PENDING) @map("kyc_status")
+  verifiedAt       DateTime? @map("verified_at") @db.Timestamptz(6)
+  createdAt        DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
   updatedAt        DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
 
   user          User          @relation(fields: [userId], references: [id], onDelete: Cascade)
@@ -231,6 +233,12 @@ enum AccountStatus {
 enum BeneficiaryStatus {
   ACTIVE
   ARCHIVED
+}
+
+enum KycStatus {
+  PENDING
+  VERIFIED
+  REJECTED
 }
 
 enum TransactionType {
