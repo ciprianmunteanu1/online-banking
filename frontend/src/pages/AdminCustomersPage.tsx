@@ -135,6 +135,7 @@ export default function AdminCustomersPage() {
         </div>
         <div className="topbar-right">
           <button className="btn btn-ghost" onClick={() => navigate('/dashboard')}>Dashboard</button>
+          <button className="btn btn-ghost" onClick={() => navigate('/cards')}>Cards</button>
           <button className="btn btn-ghost" onClick={() => navigate('/admin/customers')} style={{ color: 'var(--accent)', background: 'rgba(99,102,241,0.1)' }}>Customers</button>
           <div className="user-chip"><span className="dot" />{email}</div>
           <button className="btn btn-ghost" onClick={() => { logout(); navigate('/'); }}>Sign out</button>

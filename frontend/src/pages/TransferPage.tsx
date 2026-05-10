@@ -124,11 +124,14 @@ export default function TransferPage() {
           <div className="logo-icon" style={{ width: 32, height: 32, fontSize: 16 }}>🏦</div>
           <div className="logo-name" style={{ fontSize: 17 }}>Secure<span>Bank</span></div>
         </div>
-        <button className="btn btn-ghost" onClick={() => navigate('/dashboard')}>Dashboard</button>
-        <button className="btn btn-ghost" onClick={() => navigate('/transfer')}>Transfer</button>
-        <button className="btn btn-ghost" onClick={() => navigate('/transactions')}>History</button>
-        <button className="btn btn-ghost" onClick={() => navigate('/beneficiaries')}>Beneficiaries</button>
-        <button className="btn btn-ghost" onClick={() => navigate('/admin/customers')}>Admin</button>
+        <div className="topbar-right">
+          <button className="btn btn-ghost" onClick={() => navigate('/dashboard')}>Dashboard</button>
+          <button className="btn btn-ghost" onClick={() => navigate('/cards')}>Cards</button>
+          <button className="btn btn-ghost" onClick={() => navigate('/transfer')}>Transfer</button>
+          <button className="btn btn-ghost" onClick={() => navigate('/transactions')}>History</button>
+          <button className="btn btn-ghost" onClick={() => navigate('/beneficiaries')}>Beneficiaries</button>
+          <button className="btn btn-ghost" onClick={() => navigate('/admin/customers')}>Admin</button>
+        </div>
         <div className="user-chip"><span className="dot" />{email}</div>
       </header>
 

@@ -144,6 +144,40 @@ async function main() {
     },
   });
 
+  const card1Id = '11111111-1111-4111-1111-111111111111';
+  await prisma.card.upsert({
+    where: { id: card1Id },
+    create: {
+      id: card1Id,
+      customerId: profile.id,
+      accountId: sourceAccount.id,
+      maskedPan: '**** **** **** 4242',
+      cardType: 'DEBIT',
+      status: 'ACTIVE',
+    },
+    update: {
+      status: 'ACTIVE',
+      blockedAt: null,
+    },
+  });
+
+  const card2Id = '22222222-2222-4222-2222-222222222222';
+  await prisma.card.upsert({
+    where: { id: card2Id },
+    create: {
+      id: card2Id,
+      customerId: profile.id,
+      accountId: destAccount.id,
+      maskedPan: '**** **** **** 1234',
+      cardType: 'VIRTUAL',
+      status: 'ACTIVE',
+    },
+    update: {
+      status: 'ACTIVE',
+      blockedAt: null,
+    },
+  });
+
   console.log(`Seeded user ${email} (password: ${password})`);
   console.log(`Seeded admin ${adminEmail} (password: ${password})`);
   console.log(`SOURCE_ACCOUNT_ID=${sourceAccount.id}`);

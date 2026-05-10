@@ -10,6 +10,7 @@ import { AuthModule } from './auth/auth.module';
 import { PaymentsModule } from './payments/payments.module';
 import { PrismaModule } from './prisma/prisma.module';
 import { RedisModule } from './redis/redis.module';
+import { CardsModule } from './cards/cards.module';
 
 @Module({
   imports: [
@@ -22,6 +23,7 @@ import { RedisModule } from './redis/redis.module';
     BeneficiariesModule,
     TransactionsModule,
     PaymentsModule,
+    CardsModule,
   ],
   controllers: [AppController],
   providers: [AppService],

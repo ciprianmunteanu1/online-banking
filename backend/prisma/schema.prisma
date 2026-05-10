@@ -85,6 +85,7 @@ model CustomerProfile {
   accounts      Account[]
   beneficiaries Beneficiary[]
   transactions  Transaction[]
+  cards         Card[]
 
   @@map("customer_profiles")
 }
@@ -107,6 +108,7 @@ model Account {
   ledgerEntries    LedgerEntry[]
   transactionsFrom Transaction[] @relation("TxnFromAccount")
   transactionsTo   Transaction[] @relation("TxnToAccount")
+  cards            Card[]
 
   @@index([customerId])
   @@map("accounts")
@@ -262,6 +264,35 @@ enum TransactionStatus {
 enum LedgerSide {
   DEBIT
   CREDIT
+}
+
+enum CardType {
+  DEBIT
+  VIRTUAL
+}
+
+enum CardStatus {
+  ACTIVE
+  BLOCKED
+}
+
+model Card {
+  id          String     @id @default(uuid()) @db.Uuid
+  customerId  String     @map("customer_id") @db.Uuid
+  accountId   String     @map("account_id") @db.Uuid
+  maskedPan   String     @map("masked_pan")
+  cardType    CardType   @map("card_type")
+  status      CardStatus @default(ACTIVE)
+  createdAt   DateTime   @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt   DateTime   @updatedAt @map("updated_at") @db.Timestamptz(6)
+  blockedAt   DateTime?  @map("blocked_at") @db.Timestamptz(6)
+
+  customer CustomerProfile @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  account  Account         @relation(fields: [accountId], references: [id], onDelete: Cascade)
+
+  @@index([customerId])
+  @@index([accountId])
+  @@map("cards")
 }
 
 enum IdempotencyStatus {
