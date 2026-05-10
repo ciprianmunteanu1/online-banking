@@ -11,6 +11,7 @@ import { PaymentsModule } from './payments/payments.module';
 import { PrismaModule } from './prisma/prisma.module';
 import { RedisModule } from './redis/redis.module';
 import { CardsModule } from './cards/cards.module';
+import { StatementsModule } from './statements/statements.module';
 
 @Module({
   imports: [
@@ -24,6 +25,7 @@ import { CardsModule } from './cards/cards.module';
     TransactionsModule,
     PaymentsModule,
     CardsModule,
+    StatementsModule,
   ],
   controllers: [AppController],
   providers: [AppService],
