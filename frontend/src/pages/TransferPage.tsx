@@ -100,6 +100,9 @@ export default function TransferPage() {
         <button id="btn-go-transactions-from-transfer" className="btn btn-ghost" onClick={() => navigate('/transactions')}>
           Transactions
         </button>
+        <button id="btn-go-beneficiaries-from-transfer" className="btn btn-ghost" onClick={() => navigate('/beneficiaries')}>
+          Beneficiaries
+        </button>
       </header>
 
       <main className="main-content">

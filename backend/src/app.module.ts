@@ -1,6 +1,7 @@
 import { Module } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
 import { AccountsModule } from './accounts/accounts.module';
+import { BeneficiariesModule } from './beneficiaries/beneficiaries.module';
 import { TransactionsModule } from './transactions/transactions.module';
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
@@ -16,6 +17,7 @@ import { RedisModule } from './redis/redis.module';
     RedisModule,
     AuthModule,
     AccountsModule,
+    BeneficiariesModule,
     TransactionsModule,
     PaymentsModule,
   ],

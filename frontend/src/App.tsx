@@ -3,6 +3,7 @@ import { AuthProvider } from './context/AuthContext';
 import { ProtectedRoute } from './components/ProtectedRoute';
 import LoginPage from './pages/LoginPage';
 import MfaPage from './pages/MfaPage';
+import BeneficiariesPage from './pages/BeneficiariesPage';
 import DashboardPage from './pages/DashboardPage';
 import TransactionsPage from './pages/TransactionsPage';
 import TransferPage from './pages/TransferPage';
@@ -25,6 +26,10 @@ export default function App() {
           <Route
             path="/transactions"
             element={<ProtectedRoute><TransactionsPage /></ProtectedRoute>}
+          />
+          <Route
+            path="/beneficiaries"
+            element={<ProtectedRoute><BeneficiariesPage /></ProtectedRoute>}
           />
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>

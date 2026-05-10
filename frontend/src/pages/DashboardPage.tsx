@@ -53,6 +53,9 @@ export default function DashboardPage() {
           <button id="btn-go-transactions" className="btn btn-ghost" onClick={() => navigate('/transactions')}>
             Transactions
           </button>
+          <button id="btn-go-beneficiaries" className="btn btn-ghost" onClick={() => navigate('/beneficiaries')}>
+            Beneficiaries
+          </button>
           <div className="user-chip">
             <span className="dot" />
             {email}

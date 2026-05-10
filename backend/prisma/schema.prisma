@@ -115,12 +115,14 @@ model Beneficiary {
   customerId  String            @map("customer_id") @db.Uuid
   displayName String            @map("display_name")
   iban        String
+  alias       String?
   status      BeneficiaryStatus @default(ACTIVE)
   createdAt   DateTime          @default(now()) @map("created_at") @db.Timestamptz(6)
   archivedAt  DateTime?         @map("archived_at") @db.Timestamptz(6)
 
   customer CustomerProfile @relation(fields: [customerId], references: [id], onDelete: Cascade)
 
+  @@unique([customerId, iban], map: "beneficiaries_customer_id_iban_uidx")
   @@index([customerId])
   @@map("beneficiaries")
 }
