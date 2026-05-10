@@ -5,6 +5,7 @@ import LoginPage from './pages/LoginPage';
 import MfaPage from './pages/MfaPage';
 import BeneficiariesPage from './pages/BeneficiariesPage';
 import DashboardPage from './pages/DashboardPage';
+import RegisterPage from './pages/RegisterPage';
 import TransactionsPage from './pages/TransactionsPage';
 import TransferPage from './pages/TransferPage';
 
@@ -14,6 +15,7 @@ export default function App() {
       <BrowserRouter>
         <Routes>
           <Route path="/" element={<LoginPage />} />
+          <Route path="/register" element={<RegisterPage />} />
           <Route path="/mfa" element={<MfaPage />} />
           <Route
             path="/dashboard"

@@ -22,3 +22,14 @@ export const verifyMfa = (preMfaToken: string, otp: string) =>
     token: preMfaToken,
     body: { otp },
   });
+
+export interface RegisterResponse {
+  message: string;
+}
+
+export const register = (body: {
+  email: string;
+  password: string;
+  firstName: string;
+  lastName: string;
+}) => apiFetch<RegisterResponse>('/auth/register', { method: 'POST', body });

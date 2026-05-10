@@ -1,5 +1,5 @@
 import { type FormEvent, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { login } from '../api/auth';
 import { ApiError } from '../api/client';
 import { useAuth } from '../context/AuthContext';
@@ -80,6 +80,13 @@ export default function LoginPage() {
 
         <p className="text-sm text-muted mt-16" style={{ textAlign: 'center' }}>
           Demo: <code>demo@bank.local</code> / <code>Password123!</code>
+        </p>
+        <div className="divider" style={{ margin: '16px 0' }} />
+        <p className="text-sm text-muted" style={{ textAlign: 'center' }}>
+          New to SecureBank?{' '}
+          <Link to="/register" style={{ color: 'var(--accent-light, #818cf8)', textDecoration: 'none', fontWeight: 500 }}>
+            Create account
+          </Link>
         </p>
       </div>
     </div>

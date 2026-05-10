@@ -1,19 +1,26 @@
 import {
   BadRequestException,
+  ConflictException,
   Injectable,
   UnauthorizedException,
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { JwtService } from '@nestjs/jwt';
+import { AccountStatus } from '@prisma/client';
 import * as bcrypt from 'bcrypt';
 import { randomBytes, randomInt } from 'crypto';
 import { PrismaService } from '../prisma/prisma.service';
 import { RedisService } from '../redis/redis.service';
 import type { JwtAccessPayload } from './auth.types';
 import type { LoginDto } from './dto/login.dto';
+import type { RegisterDto } from './dto/register.dto';
 
 const MFA_OTP_TTL_SECONDS = 300;
 const MFA_REDIS_PREFIX = 'mfa:otp:';
+
+function generateDemoIban(): string {
+  return 'RO00BANK' + randomBytes(8).toString('hex').toUpperCase();
+}
 
 @Injectable()
 export class AuthService {
@@ -106,5 +113,57 @@ export class AuthService {
       tokenType: 'Bearer',
       sessionConfirmed: true,
     };
+  }
+
+  async register(dto: RegisterDto) {
+    const email = dto.email.toLowerCase().trim();
+    const existing = await this.prisma.user.findUnique({ where: { email } });
+    if (existing) {
+      throw new ConflictException('An account with this email address already exists.');
+    }
+    const passwordHash = await bcrypt.hash(dto.password, 10);
+    const fullLegalName = `${dto.firstName.trim()} ${dto.lastName.trim()}`;
+    const iban = generateDemoIban();
+
+    const user = await this.prisma.user.create({
+      data: {
+        email,
+        passwordHash,
+        isActive: true,
+        roles: {
+          connectOrCreate: {
+            where: { name: 'CLIENT' },
+            create: { name: 'CLIENT', description: 'Standard bank customer' },
+          },
+        },
+        customerProfile: {
+          create: {
+            fullLegalName,
+            accounts: {
+              create: {
+                iban,
+                currency: 'RON',
+                accountType: 'CHECKING',
+                status: AccountStatus.ACTIVE,
+                availableBalance: 0,
+              },
+            },
+          },
+        },
+      },
+      select: { id: true, email: true },
+    });
+
+    await this.prisma.auditEvent.create({
+      data: {
+        actorUserId: user.id,
+        action: 'USER_REGISTERED',
+        resourceType: 'User',
+        resourceId: user.id,
+        metadata: { email: user.email, fullLegalName },
+      },
+    });
+
+    return { message: 'Registration successful. You can now sign in.' };
   }
 }

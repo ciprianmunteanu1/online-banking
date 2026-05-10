@@ -42,7 +42,7 @@ html, body { height: 100%; font-family: 'Inter', system-ui, sans-serif; font-siz
   background: var(--bg)
     radial-gradient(ellipse at 20% 30%, rgba(99,102,241,0.06) 0%, transparent 50%); }
 
-/* ── Card ── */
+/* Card */
 .card { background: var(--bg-card); border: 1px solid var(--border);
   border-radius: var(--r-lg); box-shadow: var(--shadow), var(--glow);
   backdrop-filter: blur(20px); }
@@ -203,7 +203,7 @@ html, body { height: 100%; font-family: 'Inter', system-ui, sans-serif; font-siz
 .recent-txn-row:last-child { border-bottom: none; }
 .recent-txn-row:hover { background: var(--bg-card-hover); }
 
-/* ── Beneficiaries ── */
+/* Beneficiaries */
 .bene-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px,1fr));
   gap: 14px; margin-top: 16px; }
 .bene-card { padding: 20px 22px; border-radius: var(--r-lg); background: var(--bg-card);
