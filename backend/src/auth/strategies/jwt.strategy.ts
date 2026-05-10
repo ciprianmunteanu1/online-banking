@@ -15,6 +15,8 @@ export class JwtStrategy extends PassportStrategy(Strategy, 'jwt') {
       jwtFromRequest: ExtractJwt.fromAuthHeaderAsBearerToken(),
       ignoreExpiration: false,
       secretOrKey: secret,
+      issuer: 'online-banking',
+      audience: 'online-banking-api',
     });
   }
 
