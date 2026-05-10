@@ -1,0 +1,258 @@
+// Online banking persistence layer (PostgreSQL).
+// RBAC, sessions, customer accounts, double-entry ledger, idempotency, audit trail.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// Login identity. Staff may exist without a bank customer profile.
+model User {
+  id           String    @id @default(uuid()) @db.Uuid
+  email        String    @unique
+  // Separate login name when email is not the username.
+  username     String?   @unique
+  passwordHash String    @map("password_hash")
+  isActive     Boolean   @default(true) @map("is_active")
+  mfaEnabled   Boolean   @default(false) @map("mfa_enabled")
+  createdAt    DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt    DateTime  @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  roles             Role[]
+  sessions          Session[]
+  customerProfile   CustomerProfile?
+  auditEvents       AuditEvent[]      @relation("AuditActor")
+  idempotencyKeys   IdempotencyKey[]
+
+  @@map("users")
+}
+
+// Named role; fine-grained permissions live in application code.
+model Role {
+  id          String   @id @default(uuid()) @db.Uuid
+  name        String   @unique
+  description String?
+  createdAt   DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  users User[]
+
+  @@map("roles")
+}
+
+// Durable session row for revocation and active-session UI; short-lived state can still use Redis.
+model Session {
+  id               String    @id @default(uuid()) @db.Uuid
+  userId           String    @map("user_id") @db.Uuid
+  // Never store the raw refresh token.
+  refreshTokenHash String    @map("refresh_token_hash")
+  userAgent        String?   @map("user_agent")
+  ipAddress        String?   @map("ip_address") @db.Inet
+  createdAt        DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  expiresAt        DateTime  @map("expires_at") @db.Timestamptz(6)
+  revokedAt        DateTime? @map("revoked_at") @db.Timestamptz(6)
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([expiresAt])
+  @@map("sessions")
+}
+
+// One bank customer per user; KYC-style fields.
+model CustomerProfile {
+  id               String   @id @default(uuid()) @db.Uuid
+  userId           String   @unique @map("user_id") @db.Uuid
+  fullLegalName    String   @map("full_legal_name")
+  phoneNumber      String?  @map("phone_number")
+  // ISO 3166-1 alpha-2 when known.
+  countryCode      String?  @map("country_code") @db.Char(2)
+  addressLine1     String?  @map("address_line1")
+  addressLine2     String?  @map("address_line2")
+  city             String?
+  postalCode       String?  @map("postal_code")
+  // Sensitive; mask or encrypt at the API boundary.
+  nationalIdNumber String?  @map("national_id_number")
+  createdAt        DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt        DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  user          User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  accounts      Account[]
+  beneficiaries Beneficiary[]
+  transactions  Transaction[]
+
+  @@map("customer_profiles")
+}
+
+// Ledger-backed account. Keep availableBalance in sync with postings in the same DB transaction.
+model Account {
+  id               String        @id @default(uuid()) @db.Uuid
+  customerId       String        @map("customer_id") @db.Uuid
+  iban             String        @unique
+  currency         String        @db.Char(3)
+  availableBalance Decimal       @default(0) @map("available_balance") @db.Decimal(19, 4)
+  status           AccountStatus @default(ACTIVE)
+  // e.g. CHECKING, SAVINGS.
+  accountType      String        @map("account_type")
+  openedAt         DateTime      @default(now()) @map("opened_at") @db.Timestamptz(6)
+  closedAt         DateTime?     @map("closed_at") @db.Timestamptz(6)
+
+  customer         CustomerProfile @relation(fields: [customerId], references: [id], onDelete: Restrict)
+  ledgerEntries    LedgerEntry[]
+  transactionsFrom Transaction[] @relation("TxnFromAccount")
+  transactionsTo   Transaction[] @relation("TxnToAccount")
+
+  @@index([customerId])
+  @@map("accounts")
+}
+
+// Saved transfer payee.
+model Beneficiary {
+  id          String            @id @default(uuid()) @db.Uuid
+  customerId  String            @map("customer_id") @db.Uuid
+  displayName String            @map("display_name")
+  iban        String
+  status      BeneficiaryStatus @default(ACTIVE)
+  createdAt   DateTime          @default(now()) @map("created_at") @db.Timestamptz(6)
+  archivedAt  DateTime?         @map("archived_at") @db.Timestamptz(6)
+
+  customer CustomerProfile @relation(fields: [customerId], references: [id], onDelete: Cascade)
+
+  @@index([customerId])
+  @@map("beneficiaries")
+}
+
+// One business-level movement; ledger lines are created in the same atomic DB transaction.
+model Transaction {
+  id          String            @id @default(uuid()) @db.Uuid
+  type        TransactionType
+  status      TransactionStatus @default(PENDING)
+  amount      Decimal           @db.Decimal(19, 4)
+  currency    String            @db.Char(3)
+  reference   String?
+  description String?
+  // Who initiated (authorization scope).
+  customerId  String?           @map("customer_id") @db.Uuid
+  fromAccountId String?       @map("from_account_id") @db.Uuid
+  toAccountId   String?       @map("to_account_id") @db.Uuid
+  // External counterparty when not an internal account.
+  externalIban  String?       @map("external_iban")
+  idempotencyKeyId String?   @unique @map("idempotency_key_id") @db.Uuid
+  createdAt   DateTime          @default(now()) @map("created_at") @db.Timestamptz(6)
+  postedAt    DateTime?         @map("posted_at") @db.Timestamptz(6)
+
+  customer        CustomerProfile? @relation(fields: [customerId], references: [id], onDelete: SetNull)
+  fromAccount     Account?         @relation("TxnFromAccount", fields: [fromAccountId], references: [id], onDelete: SetNull)
+  toAccount       Account?         @relation("TxnToAccount", fields: [toAccountId], references: [id], onDelete: SetNull)
+  idempotencyKey  IdempotencyKey?  @relation(fields: [idempotencyKeyId], references: [id], onDelete: SetNull)
+  ledgerEntries   LedgerEntry[]
+
+  @@index([customerId])
+  @@index([status, createdAt])
+  @@map("transactions")
+}
+
+// Debit or credit line. App enforces balanced sums per transaction in one DB transaction.
+model LedgerEntry {
+  id            String     @id @default(uuid()) @db.Uuid
+  transactionId String     @map("transaction_id") @db.Uuid
+  accountId     String     @map("account_id") @db.Uuid
+  side          LedgerSide
+  amount        Decimal    @db.Decimal(19, 4)
+  currency      String     @db.Char(3)
+  // Stable ordering within a transaction.
+  sequence      Int        @default(0)
+  createdAt     DateTime   @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  transaction Transaction @relation(fields: [transactionId], references: [id], onDelete: Restrict)
+  account     Account     @relation(fields: [accountId], references: [id], onDelete: Restrict)
+
+  @@index([transactionId])
+  @@index([accountId, createdAt])
+  @@map("ledger_entries")
+}
+
+// Client idempotency key for sensitive writes; replay returns stored outcome.
+model IdempotencyKey {
+  id             String              @id @default(uuid()) @db.Uuid
+  key            String
+  userId         String              @map("user_id") @db.Uuid
+  // e.g. route or operation name.
+  scope          String
+  requestHash    String?             @map("request_hash")
+  status         IdempotencyStatus   @default(IN_PROGRESS)
+  responsePayload Json?             @map("response_payload")
+  httpStatus     Int?                @map("http_status")
+  createdAt      DateTime            @default(now()) @map("created_at") @db.Timestamptz(6)
+  completedAt    DateTime?           @map("completed_at") @db.Timestamptz(6)
+  expiresAt      DateTime            @map("expires_at") @db.Timestamptz(6)
+
+  user         User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  transaction  Transaction?
+
+  @@unique([userId, key], map: "idempotency_keys_user_id_key_uidx")
+  @@index([userId, scope])
+  @@index([expiresAt])
+  @@map("idempotency_keys")
+}
+
+// Audit trail: who did what on which resource.
+model AuditEvent {
+  id           String   @id @default(uuid()) @db.Uuid
+  // Null when the system acts (jobs, migrations).
+  actorUserId  String?  @map("actor_user_id") @db.Uuid
+  action       String
+  resourceType String   @map("resource_type")
+  resourceId   String?  @map("resource_id")
+  ipAddress    String?  @map("ip_address") @db.Inet
+  userAgent    String?  @map("user_agent")
+  metadata     Json?
+  createdAt    DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  actor User? @relation("AuditActor", fields: [actorUserId], references: [id], onDelete: SetNull)
+
+  @@index([actorUserId, createdAt])
+  @@index([resourceType, resourceId])
+  @@index([createdAt])
+  @@map("audit_events")
+}
+
+enum AccountStatus {
+  ACTIVE
+  FROZEN
+  CLOSED
+}
+
+enum BeneficiaryStatus {
+  ACTIVE
+  ARCHIVED
+}
+
+enum TransactionType {
+  INTERNAL_TRANSFER
+  EXTERNAL_TRANSFER
+  FEE
+  ADJUSTMENT
+  REVERSAL
+}
+
+enum TransactionStatus {
+  PENDING
+  POSTED
+  FAILED
+  REVERSED
+}
+
+enum LedgerSide {
+  DEBIT
+  CREDIT
+}
+
+enum IdempotencyStatus {
+  IN_PROGRESS
+  COMPLETED
+  FAILED
+}
