@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { type Account, getAccounts } from '../api/accounts';
 import { ApiError } from '../api/client';
 import { transfer, type TransferResponse } from '../api/payments';
-import { useAuth } from '../context/AuthContext';
+import { decodeEmail, useAuth } from '../context/AuthContext';
 
 function newIdemKey() {
   return crypto.randomUUID();
@@ -14,6 +14,7 @@ type Status = 'idle' | 'loading' | 'success' | 'step_up' | 'error';
 export default function TransferPage() {
   const { accessToken } = useAuth();
   const navigate = useNavigate();
+  const email = accessToken ? decodeEmail(accessToken) : '';
 
   const [accounts, setAccounts] = useState<Account[]>([]);
   const [srcId, setSrcId] = useState('');
@@ -94,15 +95,12 @@ export default function TransferPage() {
           <div className="logo-icon" style={{ width: 32, height: 32, fontSize: 16 }}>🏦</div>
           <div className="logo-name" style={{ fontSize: 17 }}>Secure<span>Bank</span></div>
         </div>
-        <button id="btn-back-dashboard" className="btn btn-ghost" onClick={() => navigate('/dashboard')}>
-          ← Dashboard
-        </button>
-        <button id="btn-go-transactions-from-transfer" className="btn btn-ghost" onClick={() => navigate('/transactions')}>
-          Transactions
-        </button>
-        <button id="btn-go-beneficiaries-from-transfer" className="btn btn-ghost" onClick={() => navigate('/beneficiaries')}>
-          Beneficiaries
-        </button>
+        <button className="btn btn-ghost" onClick={() => navigate('/dashboard')}>Dashboard</button>
+        <button className="btn btn-ghost" onClick={() => navigate('/transfer')}>Transfer</button>
+        <button className="btn btn-ghost" onClick={() => navigate('/transactions')}>History</button>
+        <button className="btn btn-ghost" onClick={() => navigate('/beneficiaries')}>Beneficiaries</button>
+        <button className="btn btn-ghost" onClick={() => navigate('/admin/customers')}>Admin</button>
+        <div className="user-chip"><span className="dot" />{email}</div>
       </header>
 
       <main className="main-content">

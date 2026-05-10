@@ -50,12 +50,11 @@ export default function DashboardPage() {
           <div className="logo-name" style={{ fontSize: 17 }}>Secure<span>Bank</span></div>
         </div>
         <div className="topbar-right">
-          <button id="btn-go-transactions" className="btn btn-ghost" onClick={() => navigate('/transactions')}>
-            Transactions
-          </button>
-          <button id="btn-go-beneficiaries" className="btn btn-ghost" onClick={() => navigate('/beneficiaries')}>
-            Beneficiaries
-          </button>
+          <button className="btn btn-ghost" onClick={() => navigate('/dashboard')}>Dashboard</button>
+          <button className="btn btn-ghost" onClick={() => navigate('/transfer')}>Transfer</button>
+          <button className="btn btn-ghost" onClick={() => navigate('/transactions')}>History</button>
+          <button className="btn btn-ghost" onClick={() => navigate('/beneficiaries')}>Beneficiaries</button>
+          <button className="btn btn-ghost" onClick={() => navigate('/admin/customers')}>Admin</button>
           <div className="user-chip">
             <span className="dot" />
             {email}
@@ -74,15 +73,6 @@ export default function DashboardPage() {
               {accounts.length} account{accounts.length !== 1 ? 's' : ''}
             </p>
           </div>
-          <button
-            id="btn-go-transfer"
-            className="btn btn-primary"
-            style={{ width: 'auto', padding: '10px 20px' }}
-            onClick={() => navigate('/transfer')}
-            disabled={accounts.length < 2}
-          >
-            ↗ New Transfer
-          </button>
         </div>
 
         {loading && (

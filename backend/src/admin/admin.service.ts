@@ -9,6 +9,12 @@ export class AdminService {
 
   async getCustomers() {
     return this.prisma.customerProfile.findMany({
+      where: {
+        OR: [
+          { accounts: { none: {} } },
+          { accounts: { some: { isSystem: false } } },
+        ],
+      },
       orderBy: { createdAt: 'desc' },
       select: {
         id: true,
@@ -18,6 +24,7 @@ export class AdminService {
         verifiedAt: true,
         createdAt: true,
         accounts: {
+          where: { isSystem: false },
           select: {
             id: true,
             iban: true,

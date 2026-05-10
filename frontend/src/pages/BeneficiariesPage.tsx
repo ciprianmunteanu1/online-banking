@@ -124,12 +124,11 @@ export default function BeneficiariesPage() {
           <div className="logo-name" style={{ fontSize: 17 }}>Secure<span>Bank</span></div>
         </div>
         <div className="topbar-right">
-          <button id="btn-to-dashboard-bene" className="btn btn-ghost" onClick={() => navigate('/dashboard')}>
-            ← Dashboard
-          </button>
-          <button id="btn-to-transactions-bene" className="btn btn-ghost" onClick={() => navigate('/transactions')}>
-            Transactions
-          </button>
+          <button className="btn btn-ghost" onClick={() => navigate('/dashboard')}>Dashboard</button>
+          <button className="btn btn-ghost" onClick={() => navigate('/transfer')}>Transfer</button>
+          <button className="btn btn-ghost" onClick={() => navigate('/transactions')}>History</button>
+          <button className="btn btn-ghost" onClick={() => navigate('/beneficiaries')}>Beneficiaries</button>
+          <button className="btn btn-ghost" onClick={() => navigate('/admin/customers')}>Admin</button>
           <div className="user-chip"><span className="dot" />{email}</div>
           <button id="btn-logout-bene" className="btn btn-ghost" onClick={() => { logout(); navigate('/'); }}>
             Sign out

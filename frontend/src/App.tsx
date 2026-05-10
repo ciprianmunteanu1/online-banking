@@ -8,6 +8,7 @@ import DashboardPage from './pages/DashboardPage';
 import RegisterPage from './pages/RegisterPage';
 import TransactionsPage from './pages/TransactionsPage';
 import TransferPage from './pages/TransferPage';
+import AdminCustomersPage from './pages/AdminCustomersPage';
 
 export default function App() {
   return (
@@ -32,6 +33,10 @@ export default function App() {
           <Route
             path="/beneficiaries"
             element={<ProtectedRoute><BeneficiariesPage /></ProtectedRoute>}
+          />
+          <Route
+            path="/admin/customers"
+            element={<ProtectedRoute><AdminCustomersPage /></ProtectedRoute>}
           />
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
