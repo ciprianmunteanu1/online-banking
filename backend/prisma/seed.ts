@@ -152,12 +152,17 @@ async function main() {
       customerId: profile.id,
       accountId: sourceAccount.id,
       maskedPan: '**** **** **** 4242',
+      demoPan: '4242 4242 4242 4242',
+      expiryMonth: 12,
+      expiryYear: 28,
+      demoCvv: '123',
       cardType: 'DEBIT',
       status: 'ACTIVE',
     },
     update: {
       status: 'ACTIVE',
       blockedAt: null,
+      closedAt: null,
     },
   });
 
@@ -169,12 +174,17 @@ async function main() {
       customerId: profile.id,
       accountId: destAccount.id,
       maskedPan: '**** **** **** 1234',
+      demoPan: '1234 5678 1234 1234',
+      expiryMonth: 10,
+      expiryYear: 27,
+      demoCvv: '456',
       cardType: 'VIRTUAL',
       status: 'ACTIVE',
     },
     update: {
       status: 'ACTIVE',
       blockedAt: null,
+      closedAt: null,
     },
   });
 

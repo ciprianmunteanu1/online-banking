@@ -274,6 +274,7 @@ enum CardType {
 enum CardStatus {
   ACTIVE
   BLOCKED
+  CLOSED
 }
 
 model Card {
@@ -281,11 +282,16 @@ model Card {
   customerId  String     @map("customer_id") @db.Uuid
   accountId   String     @map("account_id") @db.Uuid
   maskedPan   String     @map("masked_pan")
+  demoPan     String?    @map("demo_pan")
+  expiryMonth Int?       @map("expiry_month")
+  expiryYear  Int?       @map("expiry_year")
+  demoCvv     String?    @map("demo_cvv")
   cardType    CardType   @map("card_type")
   status      CardStatus @default(ACTIVE)
   createdAt   DateTime   @default(now()) @map("created_at") @db.Timestamptz(6)
   updatedAt   DateTime   @updatedAt @map("updated_at") @db.Timestamptz(6)
   blockedAt   DateTime?  @map("blocked_at") @db.Timestamptz(6)
+  closedAt    DateTime?  @map("closed_at") @db.Timestamptz(6)
 
   customer CustomerProfile @relation(fields: [customerId], references: [id], onDelete: Cascade)
   account  Account         @relation(fields: [accountId], references: [id], onDelete: Cascade)
