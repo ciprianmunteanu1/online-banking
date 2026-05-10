@@ -4,6 +4,7 @@ import { ProtectedRoute } from './components/ProtectedRoute';
 import LoginPage from './pages/LoginPage';
 import MfaPage from './pages/MfaPage';
 import DashboardPage from './pages/DashboardPage';
+import TransactionsPage from './pages/TransactionsPage';
 import TransferPage from './pages/TransferPage';
 
 export default function App() {
@@ -20,6 +21,10 @@ export default function App() {
           <Route
             path="/transfer"
             element={<ProtectedRoute><TransferPage /></ProtectedRoute>}
+          />
+          <Route
+            path="/transactions"
+            element={<ProtectedRoute><TransactionsPage /></ProtectedRoute>}
           />
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>

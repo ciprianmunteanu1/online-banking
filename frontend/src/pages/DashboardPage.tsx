@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { type Account, getAccounts } from '../api/accounts';
 import { ApiError } from '../api/client';
+import { type TxnSummary, getTransactions } from '../api/transactions';
 import { decodeEmail, useAuth } from '../context/AuthContext';
 
 function fmt(bal: string) {
@@ -18,6 +19,8 @@ export default function DashboardPage() {
   const [accounts, setAccounts] = useState<Account[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  const [recentTxns, setRecentTxns] = useState<TxnSummary[]>([]);
+  const [txnsLoading, setTxnsLoading] = useState(true);
 
   const email = accessToken ? decodeEmail(accessToken) : '';
 
@@ -27,6 +30,10 @@ export default function DashboardPage() {
       .then(setAccounts)
       .catch(err => setError(err instanceof ApiError ? err.message : 'Failed to load accounts'))
       .finally(() => setLoading(false));
+    getTransactions(accessToken)
+      .then(ts => setRecentTxns(ts.slice(0, 5)))
+      .catch(() => { /* silent — no accounts yet is fine */ })
+      .finally(() => setTxnsLoading(false));
   }, [accessToken]);
 
   function handleLogout() {
@@ -43,6 +50,9 @@ export default function DashboardPage() {
           <div className="logo-name" style={{ fontSize: 17 }}>Secure<span>Bank</span></div>
         </div>
         <div className="topbar-right">
+          <button id="btn-go-transactions" className="btn btn-ghost" onClick={() => navigate('/transactions')}>
+            Transactions
+          </button>
           <div className="user-chip">
             <span className="dot" />
             {email}
@@ -111,6 +121,51 @@ export default function DashboardPage() {
               </div>
             </div>
           ))}
+        </div>
+
+        {/* Recent transactions */}
+        <div style={{ marginTop: 40 }}>
+          <div className="flex justify-between items-center" style={{ marginBottom: 8 }}>
+            <h2 className="section-title" style={{ fontSize: 16 }}>Recent Transactions</h2>
+            <button className="btn btn-ghost" style={{ fontSize: 13 }} onClick={() => navigate('/transactions')}>
+              View all →
+            </button>
+          </div>
+          {txnsLoading && (
+            <div className="flex items-center gap-8">
+              <span className="spinner" style={{ borderColor: 'rgba(99,102,241,0.3)', borderTopColor: 'var(--accent)' }} />
+              <span className="text-muted" style={{ fontSize: 13 }}>Loading…</span>
+            </div>
+          )}
+          {!txnsLoading && recentTxns.length === 0 && (
+            <p className="text-sm text-muted">No transactions yet. Make your first transfer.</p>
+          )}
+          {recentTxns.length > 0 && (
+            <div className="txn-list">
+              {recentTxns.map(t => (
+                <div key={t.id} className="recent-txn-row" onClick={() => navigate('/transactions')}>
+                  <div>
+                    <span className="badge badge-transfer" style={{ marginRight: 8 }}>
+                      {t.type.replace(/_/g, ' ')}
+                    </span>
+                    <span style={{ fontSize: 12, color: 'var(--text-3)', fontFamily: 'monospace' }}>
+                      {t.id.slice(0, 8)}…
+                    </span>
+                    {t.description && (
+                      <span className="text-sm text-muted" style={{ marginLeft: 8, fontSize: 12 }}>
+                        {t.description}
+                      </span>
+                    )}
+                  </div>
+                  <div className="flex items-center gap-8">
+                    <span style={{ fontWeight: 600 }}>{parseFloat(t.amount).toFixed(2)} {t.currency}</span>
+                    <span className={`badge badge-${t.status.toLowerCase()}`}>{t.status}</span>
+                    <span className="txn-date">{new Date(t.createdAt).toLocaleDateString('ro-RO')}</span>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
         </div>
       </main>
     </div>

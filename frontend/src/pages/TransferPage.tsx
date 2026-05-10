@@ -97,6 +97,9 @@ export default function TransferPage() {
         <button id="btn-back-dashboard" className="btn btn-ghost" onClick={() => navigate('/dashboard')}>
           ← Dashboard
         </button>
+        <button id="btn-go-transactions-from-transfer" className="btn btn-ghost" onClick={() => navigate('/transactions')}>
+          Transactions
+        </button>
       </header>
 
       <main className="main-content">
