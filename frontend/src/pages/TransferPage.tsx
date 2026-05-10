@@ -2,7 +2,9 @@ import { type FormEvent, useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { type Account, getAccounts } from '../api/accounts';
 import { ApiError } from '../api/client';
-import { transfer, type TransferResponse } from '../api/payments';
+import { transfer, transferToBeneficiary, type TransferResponse } from '../api/payments';
+import type { TransferToBeneficiaryResponse } from '../api/payments';
+import { type Beneficiary, getBeneficiaries } from '../api/beneficiaries';
 import { UserMe, getMe } from '../api/auth';
 import { decodeEmail, useAuth } from '../context/AuthContext';
 
@@ -26,8 +28,12 @@ export default function TransferPage() {
 
   const [status, setStatus] = useState<Status>('idle');
   const [errorMsg, setErrorMsg] = useState('');
-  const [result, setResult] = useState<TransferResponse | null>(null);
+  const [result, setResult] = useState<TransferResponse | TransferToBeneficiaryResponse | null>(null);
   const [me, setMe] = useState<UserMe | null>(null);
+
+  const [transferMode, setTransferMode] = useState<'own' | 'beneficiary'>('own');
+  const [beneficiaries, setBeneficiaries] = useState<Beneficiary[]>([]);
+  const [beneId, setBeneId] = useState('');
 
   useEffect(() => {
     if (!accessToken) return;
@@ -37,6 +43,10 @@ export default function TransferPage() {
       if (accs.length >= 1) setSrcId(accs[0].id);
       if (accs.length >= 2) setDstId(accs[1].id);
     }).catch(() => {/* dashboard already handled this */});
+    getBeneficiaries(accessToken).then(bens => {
+      setBeneficiaries(bens);
+      if (bens.length > 0) setBeneId(bens[0].id);
+    }).catch(() => {});
   }, [accessToken]);
 
   async function handleSubmit(e: FormEvent) {
@@ -54,13 +64,24 @@ export default function TransferPage() {
     }
 
     try {
-      const res = await transfer(accessToken, idemKey, {
-        sourceAccountId: srcId,
-        destinationAccountId: dstId,
-        amount: amt,
-        currency: 'RON',
-        description: description.trim() || undefined,
-      });
+      let res;
+      if (transferMode === 'own') {
+        res = await transfer(accessToken, idemKey, {
+          sourceAccountId: srcId,
+          destinationAccountId: dstId,
+          amount: amt,
+          currency: 'RON',
+          description: description.trim() || undefined,
+        });
+      } else {
+        res = await transferToBeneficiary(accessToken, idemKey, {
+          sourceAccountId: srcId,
+          beneficiaryId: beneId,
+          amount: amt,
+          currency: 'RON',
+          description: description.trim() || undefined,
+        });
+      }
       setResult(res);
       setStatus('success');
     } catch (err) {
@@ -114,9 +135,22 @@ export default function TransferPage() {
       <main className="main-content">
         <div className="transfer-wrap">
           <h1 className="section-title" style={{ marginBottom: 4 }}>New Transfer</h1>
-          <p className="text-sm text-muted" style={{ marginBottom: 28 }}>
-            Internal transfer between your accounts (MVP)
-          </p>
+          <div className="flex gap-8" style={{ marginBottom: 28, marginTop: 12 }}>
+            <button
+              className={`btn ${transferMode === 'own' ? 'btn-primary' : 'btn-secondary'}`}
+              onClick={() => { setTransferMode('own'); resetForm(); }}
+              style={{ padding: '6px 16px', fontSize: 13 }}
+            >
+              Between my accounts
+            </button>
+            <button
+              className={`btn ${transferMode === 'beneficiary' ? 'btn-primary' : 'btn-secondary'}`}
+              onClick={() => { setTransferMode('beneficiary'); resetForm(); }}
+              style={{ padding: '6px 16px', fontSize: 13 }}
+            >
+              To beneficiary
+            </button>
+          </div>
 
           {/* Success */}
           {status === 'success' && result && (
@@ -126,6 +160,11 @@ export default function TransferPage() {
               <div style={{ fontSize: 13, marginTop: 6 }}>
                 {parseFloat(result.amount).toFixed(2)} {result.currency} — ledger balanced: {result.ledgerBalanced ? '✓' : '✗'}
               </div>
+              {'internalBeneficiary' in result && (
+                <div style={{ fontSize: 12, marginTop: 4, color: 'var(--text-3)' }}>
+                  Beneficiary type: {result.internalBeneficiary ? 'Internal matching account' : 'External destination'}
+                </div>
+              )}
               <button id="btn-new-transfer" className="btn btn-secondary" style={{ marginTop: 14 }} onClick={resetForm}>
                 Make another transfer
               </button>
@@ -155,7 +194,7 @@ export default function TransferPage() {
               <div className="field">
                 <label htmlFor="src-account">From account</label>
                 <select id="src-account" value={srcId} onChange={e => setSrcId(e.target.value)} required>
-                  {accounts.filter(a => a.id !== dstId).map(a => (
+                  {accounts.filter(a => transferMode === 'beneficiary' || a.id !== dstId).map(a => (
                     <option key={a.id} value={a.id}>
                       {a.accountType} — {parseFloat(a.availableBalance).toFixed(2)} {a.currency}
                     </option>
@@ -163,16 +202,33 @@ export default function TransferPage() {
                 </select>
               </div>
 
-              <div className="field">
-                <label htmlFor="dst-account">To account</label>
-                <select id="dst-account" value={dstId} onChange={e => setDstId(e.target.value)} required>
-                  {accounts.filter(a => a.id !== srcId).map(a => (
-                    <option key={a.id} value={a.id}>
-                      {a.accountType} — {parseFloat(a.availableBalance).toFixed(2)} {a.currency}
-                    </option>
-                  ))}
-                </select>
-              </div>
+              {transferMode === 'own' ? (
+                <div className="field">
+                  <label htmlFor="dst-account">To account</label>
+                  <select id="dst-account" value={dstId} onChange={e => setDstId(e.target.value)} required>
+                    {accounts.filter(a => a.id !== srcId).map(a => (
+                      <option key={a.id} value={a.id}>
+                        {a.accountType} — {parseFloat(a.availableBalance).toFixed(2)} {a.currency}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              ) : (
+                <div className="field">
+                  <label htmlFor="bene-account">To beneficiary</label>
+                  {beneficiaries.length === 0 ? (
+                    <div className="text-sm text-muted">No beneficiaries found. Add one in Beneficiaries tab.</div>
+                  ) : (
+                    <select id="bene-account" value={beneId} onChange={e => setBeneId(e.target.value)} required>
+                      {beneficiaries.map(b => (
+                        <option key={b.id} value={b.id}>
+                          {b.displayName} ({b.iban})
+                        </option>
+                      ))}
+                    </select>
+                  )}
+                </div>
+              )}
 
               <div className="field">
                 <label htmlFor="amount">Amount</label>
@@ -242,7 +298,13 @@ export default function TransferPage() {
                 id="btn-submit-transfer"
                 type="submit"
                 className="btn btn-primary"
-                disabled={isLoading || !srcId || !dstId || !amount || srcId === dstId || (me ? me.kycStatus !== 'VERIFIED' : false)}
+                disabled={
+                  isLoading ||
+                  !srcId ||
+                  !amount ||
+                  (me ? me.kycStatus !== 'VERIFIED' : false) ||
+                  (transferMode === 'own' ? !dstId || srcId === dstId : !beneId)
+                }
               >
                 {isLoading ? <span className="spinner" /> : null}
                 {isLoading ? 'Processing…' : 'Send Transfer'}

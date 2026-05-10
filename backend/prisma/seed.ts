@@ -90,8 +90,24 @@ async function main() {
       isSystem: true,
     },
     update: {
-      availableBalance: 1_000_000_000,
       isSystem: true,
+    },
+  });
+
+  const extSystemIban = 'RO00EXTBANK0000000000001';
+  const extSystemAccount = await prisma.account.upsert({
+    where: { iban: extSystemIban },
+    create: {
+      customerId: adminProfile.id,
+      iban: extSystemIban,
+      currency: 'RON',
+      accountType: 'EXTERNAL_SETTLEMENT',
+      availableBalance: 0,
+      isSystem: true,
+    },
+    update: {
+      isSystem: true,
+      accountType: 'EXTERNAL_SETTLEMENT',
     },
   });
 
@@ -108,7 +124,6 @@ async function main() {
       availableBalance: 50_000,
     },
     update: {
-      availableBalance: 50_000,
       status: 'ACTIVE',
       closedAt: null,
     },

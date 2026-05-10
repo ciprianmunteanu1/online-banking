@@ -17,9 +17,12 @@ import { createHash } from 'crypto';
 import { PrismaService } from '../prisma/prisma.service';
 import type { JwtAccessPayload } from '../auth/auth.types';
 import type { CreateTransferDto } from './dto/create-transfer.dto';
+import type { TransferToBeneficiaryDto } from './dto/transfer-to-beneficiary.dto';
 import type {
   TransferServiceResult,
   TransferSuccessResponse,
+  BeneficiaryTransferServiceResult,
+  BeneficiaryTransferSuccessResponse,
 } from './payments.types';
 import { StepUpRequiredException } from './exceptions/step-up-required.exception';
 
@@ -62,6 +65,20 @@ function stableRequestHash(
   return createHash('sha256').update(canonical).digest('hex');
 }
 
+function stableBeneficiaryRequestHash(
+  dto: TransferToBeneficiaryDto,
+  currencyNorm: string,
+): string {
+  const canonical = JSON.stringify({
+    amount: dto.amount,
+    currency: currencyNorm,
+    description: dto.description ?? null,
+    beneficiaryId: dto.beneficiaryId,
+    sourceAccountId: dto.sourceAccountId,
+  });
+  return createHash('sha256').update(canonical).digest('hex');
+}
+
 function parseCompletedPayload(
   raw: Prisma.JsonValue | null | undefined,
 ): TransferSuccessResponse | null {
@@ -85,6 +102,39 @@ function parseCompletedPayload(
       destinationAccountId: o.destinationAccountId,
       amount: o.amount,
       currency: o.currency,
+      ledgerBalanced: true,
+    };
+  }
+  return null;
+}
+
+function parseBeneficiaryCompletedPayload(
+  raw: Prisma.JsonValue | null | undefined,
+): BeneficiaryTransferSuccessResponse | null {
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) {
+    return null;
+  }
+  const o = raw as Record<string, unknown>;
+  if (
+    typeof o.transactionId === 'string' &&
+    typeof o.status === 'string' &&
+    typeof o.sourceAccountId === 'string' &&
+    typeof o.beneficiaryId === 'string' &&
+    typeof o.beneficiaryIban === 'string' &&
+    typeof o.amount === 'string' &&
+    typeof o.currency === 'string' &&
+    typeof o.internalBeneficiary === 'boolean' &&
+    o.ledgerBalanced === true
+  ) {
+    return {
+      transactionId: o.transactionId,
+      status: o.status,
+      sourceAccountId: o.sourceAccountId,
+      beneficiaryId: o.beneficiaryId,
+      beneficiaryIban: o.beneficiaryIban,
+      amount: o.amount,
+      currency: o.currency,
+      internalBeneficiary: o.internalBeneficiary,
       ledgerBalanced: true,
     };
   }
@@ -404,5 +454,263 @@ export class PaymentsService {
     });
 
     return { httpStatus: HttpStatus.CREATED, body };
+  }
+
+  async transferToBeneficiary(
+    user: JwtAccessPayload,
+    dto: TransferToBeneficiaryDto,
+    idempotencyKey: string,
+  ): Promise<BeneficiaryTransferServiceResult> {
+    if (!idempotencyKey.trim()) {
+      throw new BadRequestException('x-idempotency-key header is required');
+    }
+
+    const profile = await this.prisma.customerProfile.findUnique({
+      where: { userId: user.sub },
+      select: { id: true, kycStatus: true },
+    });
+
+    if (!profile || profile.kycStatus !== 'VERIFIED') {
+      throw new ForbiddenException({
+        code: 'KYC_REQUIRED',
+        message: 'Customer identity verification is required before transfers.',
+      });
+    }
+
+    const currency = (dto.currency ?? 'RON').trim().toUpperCase();
+    if (currency !== 'RON') {
+      throw new BadRequestException('Only RON currency is supported in MVP');
+    }
+
+    const amountDecimal = new Prisma.Decimal(dto.amount);
+    this.runMockFraudCheck(amountDecimal);
+
+    const requestHash = stableBeneficiaryRequestHash(dto, currency);
+
+    for (let attempt = 1; attempt <= SERIALIZABLE_RETRIES; attempt += 1) {
+      try {
+        return await this.prisma.$transaction(
+          async (tx: Prisma.TransactionClient) =>
+            this.executeBeneficiaryTransferTx(
+              tx,
+              user.sub,
+              profile.id,
+              dto,
+              idempotencyKey.trim(),
+              currency,
+              amountDecimal,
+              requestHash,
+            ),
+          {
+            isolationLevel: Prisma.TransactionIsolationLevel.Serializable,
+            maxWait: 10_000,
+            timeout: 30_000,
+          },
+        );
+      } catch (err) {
+        if (isSerializationFailure(err) && attempt < SERIALIZABLE_RETRIES) continue;
+        throw err;
+      }
+    }
+    throw new BadRequestException('Transfer failed after retries');
+  }
+
+  private async executeBeneficiaryTransferTx(
+    tx: Prisma.TransactionClient,
+    userId: string,
+    profileId: string,
+    dto: TransferToBeneficiaryDto,
+    idempotencyKey: string,
+    currency: string,
+    amountDecimal: Prisma.Decimal,
+    requestHash: string,
+  ): Promise<BeneficiaryTransferServiceResult> {
+    const existingKey = await tx.idempotencyKey.findUnique({
+      where: {
+        userId_key: { userId, key: idempotencyKey },
+      },
+    });
+
+    if (existingKey) {
+      if (existingKey.requestHash !== requestHash) {
+        throw new ConflictException('Idempotency key reused with different request payload');
+      }
+      if (existingKey.status === IdempotencyStatus.COMPLETED) {
+        const payload = parseBeneficiaryCompletedPayload(existingKey.responsePayload);
+        if (payload) return { httpStatus: HttpStatus.OK, body: payload };
+      }
+      if (existingKey.status === IdempotencyStatus.FAILED) {
+        throw new BadRequestException('Previous attempt with this key failed');
+      }
+      throw new ConflictException('A request with this key is currently in progress');
+    }
+
+    const expiresAt = new Date(Date.now() + IDEMPOTENCY_TTL_MS);
+    const idemRow = await tx.idempotencyKey.create({
+      data: {
+        userId,
+        key: idempotencyKey,
+        scope: 'POST /payments/transfer-to-beneficiary',
+        requestHash,
+        status: IdempotencyStatus.IN_PROGRESS,
+        expiresAt,
+      },
+    });
+
+    const sourceAccount = await tx.account.findFirst({
+      where: {
+        id: dto.sourceAccountId,
+        customerId: profileId,
+        status: AccountStatus.ACTIVE,
+        currency,
+        isSystem: false,
+      },
+    });
+    if (!sourceAccount) throw new BadRequestException('Source account not found or invalid');
+    if (sourceAccount.availableBalance.lt(amountDecimal)) {
+      await tx.idempotencyKey.update({ where: { id: idemRow.id }, data: { status: IdempotencyStatus.FAILED } });
+      throw new BadRequestException('Insufficient funds');
+    }
+
+    const beneficiary = await tx.beneficiary.findFirst({
+      where: {
+        id: dto.beneficiaryId,
+        customerId: profileId,
+        status: 'ACTIVE',
+      },
+    });
+    if (!beneficiary) throw new BadRequestException('Beneficiary not found or invalid');
+
+    // internal vs external
+    let destinationAccountId: string;
+    let internalBeneficiary = false;
+
+    const matchedInternal = await tx.account.findFirst({
+      where: {
+        iban: beneficiary.iban,
+        status: AccountStatus.ACTIVE,
+        currency,
+        isSystem: false,
+      },
+    });
+
+    if (matchedInternal) {
+      destinationAccountId = matchedInternal.id;
+      internalBeneficiary = true;
+    } else {
+      const extSystem = await tx.account.findFirst({
+        where: {
+          accountType: 'EXTERNAL_SETTLEMENT',
+          isSystem: true,
+          status: AccountStatus.ACTIVE,
+          currency,
+        },
+      });
+      if (!extSystem) throw new BadRequestException('External settlement account not found');
+      destinationAccountId = extSystem.id;
+      internalBeneficiary = false;
+    }
+
+    if (sourceAccount.id === destinationAccountId) {
+      throw new BadRequestException('Cannot transfer to the same account via beneficiary');
+    }
+
+    const sourceResult = await tx.account.updateMany({
+      where: {
+        id: sourceAccount.id,
+        availableBalance: { gte: amountDecimal },
+      },
+      data: {
+        availableBalance: { decrement: amountDecimal },
+      },
+    });
+
+    if (sourceResult.count !== 1) {
+      await tx.idempotencyKey.update({ where: { id: idemRow.id }, data: { status: IdempotencyStatus.FAILED } });
+      throw new ConflictException('Insufficient funds or concurrent update');
+    }
+
+    await tx.account.update({
+      where: { id: destinationAccountId },
+      data: {
+        availableBalance: { increment: amountDecimal },
+      },
+    });
+
+    const transaction = await tx.transaction.create({
+      data: {
+        type: TransactionType.BENEFICIARY_TRANSFER,
+        status: TransactionStatus.POSTED,
+        amount: amountDecimal,
+        currency,
+        description: dto.description || null,
+        customerId: profileId,
+        fromAccountId: sourceAccount.id,
+        toAccountId: destinationAccountId,
+        ledgerEntries: {
+          create: [
+            {
+              accountId: sourceAccount.id,
+              side: LedgerSide.DEBIT,
+              amount: amountDecimal,
+              currency,
+              sequence: 0,
+            },
+            {
+              accountId: destinationAccountId,
+              side: LedgerSide.CREDIT,
+              amount: amountDecimal,
+              currency,
+              sequence: 1,
+            },
+          ],
+        },
+      },
+    });
+
+    const successBody: BeneficiaryTransferSuccessResponse = {
+      transactionId: transaction.id,
+      status: transaction.status,
+      sourceAccountId: sourceAccount.id,
+      beneficiaryId: beneficiary.id,
+      beneficiaryIban: beneficiary.iban,
+      amount: amountDecimal.toFixed(2),
+      currency,
+      internalBeneficiary,
+      ledgerBalanced: true,
+    };
+
+    await tx.idempotencyKey.update({
+      where: { id: idemRow.id },
+      data: {
+        status: IdempotencyStatus.COMPLETED,
+        responsePayload: successBody as unknown as Prisma.InputJsonValue,
+        httpStatus: HttpStatus.CREATED,
+        completedAt: new Date(),
+      },
+    });
+
+    await tx.auditEvent.create({
+      data: {
+        actorUserId: userId,
+        action: 'BENEFICIARY_TRANSFER_POSTED',
+        resourceType: 'Transaction',
+        resourceId: transaction.id,
+        metadata: {
+          sourceAccountId: sourceAccount.id,
+          beneficiaryId: beneficiary.id,
+          beneficiaryIban: beneficiary.iban,
+          amount: amountDecimal.toFixed(2),
+          currency,
+          internalBeneficiary,
+          idempotencyKey,
+        },
+      },
+    });
+
+    return {
+      httpStatus: HttpStatus.CREATED,
+      body: successBody,
+    };
   }
 }

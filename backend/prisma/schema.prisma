@@ -249,6 +249,7 @@ enum TransactionType {
   ADJUSTMENT
   REVERSAL
   ADMIN_CREDIT
+  BENEFICIARY_TRANSFER
 }
 
 enum TransactionStatus {
