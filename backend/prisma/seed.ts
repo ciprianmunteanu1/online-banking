@@ -64,6 +64,37 @@ async function main() {
     },
   });
 
+  const adminProfile = await prisma.customerProfile.upsert({
+    where: { userId: adminUser.id },
+    create: {
+      userId: adminUser.id,
+      fullLegalName: 'Bank Admin',
+      kycStatus: 'VERIFIED',
+      verifiedAt: new Date(),
+    },
+    update: {
+      kycStatus: 'VERIFIED',
+      verifiedAt: new Date(),
+    },
+  });
+
+  const systemIban = 'RO00SYSBANK0000000000001';
+  const systemAccount = await prisma.account.upsert({
+    where: { iban: systemIban },
+    create: {
+      customerId: adminProfile.id,
+      iban: systemIban,
+      currency: 'RON',
+      accountType: 'SETTLEMENT',
+      availableBalance: 1_000_000_000,
+      isSystem: true,
+    },
+    update: {
+      availableBalance: 1_000_000_000,
+      isSystem: true,
+    },
+  });
+
   const sourceIban = 'RO49BKCH0000000011110001';
   const destIban = 'RO49BKCH0000000022220002';
 
@@ -102,6 +133,7 @@ async function main() {
   console.log(`Seeded admin ${adminEmail} (password: ${password})`);
   console.log(`SOURCE_ACCOUNT_ID=${sourceAccount.id}`);
   console.log(`DEST_ACCOUNT_ID=${destAccount.id}`);
+  console.log(`SYSTEM_ACCOUNT_ID=${systemAccount.id}`);
 }
 
 main()

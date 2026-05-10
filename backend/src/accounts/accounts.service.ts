@@ -12,7 +12,7 @@ export class AccountsService {
     });
     if (!profile) return [];
     return this.prisma.account.findMany({
-      where: { customerId: profile.id },
+      where: { customerId: profile.id, isSystem: false },
       select: {
         id: true,
         iban: true,

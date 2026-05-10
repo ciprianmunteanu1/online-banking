@@ -99,6 +99,7 @@ model Account {
   status           AccountStatus @default(ACTIVE)
   // e.g. CHECKING, SAVINGS.
   accountType      String        @map("account_type")
+  isSystem         Boolean       @default(false) @map("is_system")
   openedAt         DateTime      @default(now()) @map("opened_at") @db.Timestamptz(6)
   closedAt         DateTime?     @map("closed_at") @db.Timestamptz(6)
 
@@ -247,6 +248,7 @@ enum TransactionType {
   FEE
   ADJUSTMENT
   REVERSAL
+  ADMIN_CREDIT
 }
 
 enum TransactionStatus {
