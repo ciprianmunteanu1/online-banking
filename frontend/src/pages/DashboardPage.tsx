@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { type Account, getAccounts } from '../api/accounts';
 import { ApiError } from '../api/client';
 import { type TxnSummary, getTransactions } from '../api/transactions';
+import { UserMe, getMe } from '../api/auth';
 import { decodeEmail, useAuth } from '../context/AuthContext';
 
 function fmt(bal: string) {
@@ -21,11 +22,13 @@ export default function DashboardPage() {
   const [error, setError] = useState('');
   const [recentTxns, setRecentTxns] = useState<TxnSummary[]>([]);
   const [txnsLoading, setTxnsLoading] = useState(true);
+  const [me, setMe] = useState<UserMe | null>(null);
 
   const email = accessToken ? decodeEmail(accessToken) : '';
 
   useEffect(() => {
     if (!accessToken) return;
+    getMe(accessToken).then(setMe).catch(() => {});
     getAccounts(accessToken)
       .then(setAccounts)
       .catch(err => setError(err instanceof ApiError ? err.message : 'Failed to load accounts'))
@@ -68,12 +71,28 @@ export default function DashboardPage() {
       <main className="main-content">
         <div className="flex justify-between items-center">
           <div>
-            <h1 className="section-title">My Accounts</h1>
+            <h1 className="section-title">
+              My Accounts
+              {me?.kycStatus === 'VERIFIED' && (
+                <span className="text-sm" style={{ color: 'var(--success)', marginLeft: 12, fontWeight: 'normal' }}>✓ Identity verified</span>
+              )}
+            </h1>
             <p className="text-sm text-muted" style={{ marginTop: 4 }}>
               {accounts.length} account{accounts.length !== 1 ? 's' : ''}
             </p>
           </div>
         </div>
+
+        {me?.kycStatus === 'PENDING' && (
+          <div className="alert alert-warn" style={{ marginTop: 20 }}>
+            ⚠️ Identity verification pending. Transfers are disabled until approval.
+          </div>
+        )}
+        {me?.kycStatus === 'REJECTED' && (
+          <div className="alert alert-error" style={{ marginTop: 20 }}>
+            ⚠️ Identity verification rejected. Please contact support.
+          </div>
+        )}
 
         {loading && (
           <div className="flex items-center gap-8" style={{ marginTop: 32 }}>

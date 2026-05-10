@@ -1,4 +1,4 @@
-import { Body, Controller, Post, Req, UseGuards } from '@nestjs/common';
+import { Body, Controller, Post, Req, UseGuards, Get } from '@nestjs/common';
 import type { Request } from 'express';
 import type { JwtAccessPayload } from './auth.types';
 import { AuthService } from './auth.service';
@@ -6,6 +6,7 @@ import { LoginDto } from './dto/login.dto';
 import { RegisterDto } from './dto/register.dto';
 import { VerifyMfaDto } from './dto/verify-mfa.dto';
 import { JwtAuthGuard } from './guards/jwt-auth.guard';
+import { MfaVerifiedGuard } from './guards/mfa-verified.guard';
 
 @Controller('auth')
 export class AuthController {
@@ -26,5 +27,12 @@ export class AuthController {
   verifyMfa(@Req() req: Request, @Body() dto: VerifyMfaDto) {
     const user = req.user as JwtAccessPayload;
     return this.auth.verifyMfa(user, dto.otp);
+  }
+
+  @Get('me')
+  @UseGuards(JwtAuthGuard, MfaVerifiedGuard)
+  getMe(@Req() req: Request) {
+    const user = req.user as JwtAccessPayload;
+    return this.auth.getMe(user.sub);
   }
 }

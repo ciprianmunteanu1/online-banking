@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { type Account, getAccounts } from '../api/accounts';
 import { ApiError } from '../api/client';
 import { transfer, type TransferResponse } from '../api/payments';
+import { UserMe, getMe } from '../api/auth';
 import { decodeEmail, useAuth } from '../context/AuthContext';
 
 function newIdemKey() {
@@ -26,9 +27,11 @@ export default function TransferPage() {
   const [status, setStatus] = useState<Status>('idle');
   const [errorMsg, setErrorMsg] = useState('');
   const [result, setResult] = useState<TransferResponse | null>(null);
+  const [me, setMe] = useState<UserMe | null>(null);
 
   useEffect(() => {
     if (!accessToken) return;
+    getMe(accessToken).then(setMe).catch(() => {});
     getAccounts(accessToken).then(accs => {
       setAccounts(accs);
       if (accs.length >= 1) setSrcId(accs[0].id);
@@ -65,6 +68,11 @@ export default function TransferPage() {
         const raw = err.data as Record<string, unknown> | null;
         if (raw?.code === 'STEP_UP_REQUIRED') {
           setStatus('step_up');
+          return;
+        }
+        if (raw?.code === 'KYC_REQUIRED') {
+          setErrorMsg(raw.message as string || 'Customer identity verification is required before transfers.');
+          setStatus('error');
           return;
         }
         setErrorMsg(err.message);
@@ -234,7 +242,7 @@ export default function TransferPage() {
                 id="btn-submit-transfer"
                 type="submit"
                 className="btn btn-primary"
-                disabled={isLoading || !srcId || !dstId || !amount || srcId === dstId}
+                disabled={isLoading || !srcId || !dstId || !amount || srcId === dstId || (me ? me.kycStatus !== 'VERIFIED' : false)}
               >
                 {isLoading ? <span className="spinner" /> : null}
                 {isLoading ? 'Processing…' : 'Send Transfer'}

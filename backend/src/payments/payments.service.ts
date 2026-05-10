@@ -1,6 +1,7 @@
 import {
   BadRequestException,
   ConflictException,
+  ForbiddenException,
   HttpStatus,
   Injectable,
 } from '@nestjs/common';
@@ -107,6 +108,18 @@ export class PaymentsService {
   ): Promise<TransferServiceResult> {
     if (!idempotencyKey.trim()) {
       throw new BadRequestException('x-idempotency-key header is required');
+    }
+
+    const profile = await this.prisma.customerProfile.findUnique({
+      where: { userId: user.sub },
+      select: { kycStatus: true },
+    });
+
+    if (!profile || profile.kycStatus !== 'VERIFIED') {
+      throw new ForbiddenException({
+        code: 'KYC_REQUIRED',
+        message: 'Customer identity verification is required before transfers.',
+      });
     }
 
     if (dto.sourceAccountId === dto.destinationAccountId) {

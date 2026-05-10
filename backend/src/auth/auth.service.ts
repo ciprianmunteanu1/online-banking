@@ -166,4 +166,35 @@ export class AuthService {
 
     return { message: 'Registration successful. You can now sign in.' };
   }
+
+  async getMe(userId: string) {
+    const user = await this.prisma.user.findUnique({
+      where: { id: userId },
+      select: {
+        id: true,
+        email: true,
+        roles: { select: { name: true } },
+        customerProfile: {
+          select: {
+            id: true,
+            fullLegalName: true,
+            kycStatus: true,
+            verifiedAt: true,
+          },
+        },
+      },
+    });
+
+    if (!user) throw new UnauthorizedException('User not found');
+
+    return {
+      userId: user.id,
+      email: user.email,
+      roles: user.roles.map((r) => r.name),
+      customerProfileId: user.customerProfile?.id,
+      fullLegalName: user.customerProfile?.fullLegalName,
+      kycStatus: user.customerProfile?.kycStatus,
+      verifiedAt: user.customerProfile?.verifiedAt,
+    };
+  }
 }

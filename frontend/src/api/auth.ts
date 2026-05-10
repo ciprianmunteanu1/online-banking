@@ -33,3 +33,16 @@ export const register = (body: {
   firstName: string;
   lastName: string;
 }) => apiFetch<RegisterResponse>('/auth/register', { method: 'POST', body });
+
+export interface UserMe {
+  userId: string;
+  email: string;
+  roles: string[];
+  customerProfileId?: string;
+  fullLegalName?: string;
+  kycStatus?: string;
+  verifiedAt?: string | null;
+}
+
+export const getMe = (token: string) =>
+  apiFetch<UserMe>('/auth/me', { token });
