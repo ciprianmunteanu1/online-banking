@@ -9,6 +9,7 @@ import RegisterPage from './pages/RegisterPage';
 import TransactionsPage from './pages/TransactionsPage';
 import TransferPage from './pages/TransferPage';
 import CardsPage from './pages/CardsPage';
+import StatementsPage from './pages/StatementsPage';
 import AdminCustomersPage from './pages/AdminCustomersPage';
 
 export default function App() {
@@ -38,6 +39,10 @@ export default function App() {
           <Route
             path="/cards"
             element={<ProtectedRoute><CardsPage /></ProtectedRoute>}
+          />
+          <Route
+            path="/statements"
+            element={<ProtectedRoute><StatementsPage /></ProtectedRoute>}
           />
           <Route
             path="/admin/customers"

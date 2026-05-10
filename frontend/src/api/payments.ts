@@ -54,3 +54,15 @@ export const transferToBeneficiary = (
   idempotencyKey,
   body,
 });
+
+export interface ConfirmStepUpRequest {
+  challengeId: string;
+  otp: string;
+}
+
+export const confirmStepUp = (token: string, body: ConfirmStepUpRequest) =>
+  apiFetch<TransferResponse | TransferToBeneficiaryResponse>('/payments/confirm-step-up', {
+    method: 'POST',
+    token,
+    body,
+  });

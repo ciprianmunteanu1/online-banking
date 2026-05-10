@@ -14,6 +14,7 @@ import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { MfaVerifiedGuard } from '../auth/guards/mfa-verified.guard';
 import { CreateTransferDto } from './dto/create-transfer.dto';
 import { TransferToBeneficiaryDto } from './dto/transfer-to-beneficiary.dto';
+import { ConfirmStepUpDto } from './dto/confirm-step-up.dto';
 import { StepUpRequiredFilter } from './filters/step-up-required.filter';
 import { PaymentsService } from './payments.service';
 
@@ -46,6 +47,19 @@ export class PaymentsController {
   ) {
     const user = req.user as JwtAccessPayload;
     const result = await this.payments.transferToBeneficiary(user, dto, idempotencyKey ?? '');
+    res.status(result.httpStatus);
+    return result.body;
+  }
+
+  @Post('confirm-step-up')
+  @UseGuards(JwtAuthGuard, MfaVerifiedGuard)
+  async confirmStepUp(
+    @Req() req: Request,
+    @Body() dto: ConfirmStepUpDto,
+    @Res({ passthrough: true }) res: Response,
+  ) {
+    const user = req.user as JwtAccessPayload;
+    const result = await this.payments.confirmStepUp(user, dto.challengeId, dto.otp);
     res.status(result.httpStatus);
     return result.body;
   }

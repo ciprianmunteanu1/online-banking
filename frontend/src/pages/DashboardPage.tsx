@@ -57,6 +57,7 @@ export default function DashboardPage() {
           <button className="btn btn-ghost" onClick={() => navigate('/cards')}>Cards</button>
           <button className="btn btn-ghost" onClick={() => navigate('/transfer')}>Transfer</button>
           <button className="btn btn-ghost" onClick={() => navigate('/transactions')}>History</button>
+          <button className="btn btn-ghost" onClick={() => navigate('/statements')}>Statements</button>
           <button className="btn btn-ghost" onClick={() => navigate('/beneficiaries')}>Beneficiaries</button>
           <button className="btn btn-ghost" onClick={() => navigate('/admin/customers')}>Admin</button>
           <div className="user-chip">

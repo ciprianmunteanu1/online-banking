@@ -4,6 +4,7 @@ import {
   ForbiddenException,
   HttpStatus,
   Injectable,
+  Logger,
 } from '@nestjs/common';
 import {
   AccountStatus,
@@ -15,6 +16,7 @@ import {
 } from '@prisma/client';
 import { createHash } from 'crypto';
 import { PrismaService } from '../prisma/prisma.service';
+import { RedisService } from '../redis/redis.service';
 import type { JwtAccessPayload } from '../auth/auth.types';
 import type { CreateTransferDto } from './dto/create-transfer.dto';
 import type { TransferToBeneficiaryDto } from './dto/transfer-to-beneficiary.dto';
@@ -143,11 +145,43 @@ function parseBeneficiaryCompletedPayload(
 
 @Injectable()
 export class PaymentsService {
-  constructor(private readonly prisma: PrismaService) {}
+  private readonly logger = new Logger(PaymentsService.name);
 
-  runMockFraudCheck(amount: Prisma.Decimal): void {
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly redis: RedisService,
+  ) {}
+
+  async runMockFraudCheck(
+    userId: string,
+    idempotencyKey: string,
+    amount: Prisma.Decimal,
+    type: 'INTERNAL_TRANSFER' | 'BENEFICIARY_TRANSFER',
+    requestBody: any,
+  ): Promise<void> {
     if (amount.gt(STEP_UP_THRESHOLD)) {
-      throw new StepUpRequiredException();
+      const existing = await this.prisma.idempotencyKey.findUnique({
+        where: { userId_key: { userId, key: idempotencyKey } },
+      });
+      if (existing?.status === IdempotencyStatus.COMPLETED) {
+        return;
+      }
+      
+      const challengeId = Math.random().toString(36).substring(2, 15);
+      const redisKey = `stepup:transfer:${userId}:${challengeId}`;
+      const otp = Math.floor(100000 + Math.random() * 900000).toString();
+      const payload = {
+        userId,
+        type,
+        requestBody,
+        idempotencyKey,
+        createdAt: new Date().toISOString(),
+      };
+      await this.redis.redis.set(redisKey, JSON.stringify({ payload, otp }), 'EX', 300);
+      
+      this.logger.log(`[Step-up mock] OTP for transfer challenge ${challengeId}: ${otp}`);
+
+      throw new StepUpRequiredException(challengeId, 300);
     }
   }
 
@@ -155,6 +189,7 @@ export class PaymentsService {
     user: JwtAccessPayload,
     dto: CreateTransferDto,
     idempotencyKey: string,
+    skipFraudCheck = false,
   ): Promise<TransferServiceResult> {
     if (!idempotencyKey.trim()) {
       throw new BadRequestException('x-idempotency-key header is required');
@@ -184,7 +219,10 @@ export class PaymentsService {
     }
 
     const amountDecimal = new Prisma.Decimal(dto.amount);
-    this.runMockFraudCheck(amountDecimal);
+    
+    if (!skipFraudCheck) {
+      await this.runMockFraudCheck(user.sub, idempotencyKey.trim(), amountDecimal, 'INTERNAL_TRANSFER', dto);
+    }
 
     const requestHash = stableRequestHash(dto, currency);
 
@@ -460,6 +498,7 @@ export class PaymentsService {
     user: JwtAccessPayload,
     dto: TransferToBeneficiaryDto,
     idempotencyKey: string,
+    skipFraudCheck = false,
   ): Promise<BeneficiaryTransferServiceResult> {
     if (!idempotencyKey.trim()) {
       throw new BadRequestException('x-idempotency-key header is required');
@@ -483,7 +522,10 @@ export class PaymentsService {
     }
 
     const amountDecimal = new Prisma.Decimal(dto.amount);
-    this.runMockFraudCheck(amountDecimal);
+    
+    if (!skipFraudCheck) {
+      await this.runMockFraudCheck(user.sub, idempotencyKey.trim(), amountDecimal, 'BENEFICIARY_TRANSFER', dto);
+    }
 
     const requestHash = stableBeneficiaryRequestHash(dto, currency);
 
@@ -712,5 +754,29 @@ export class PaymentsService {
       httpStatus: HttpStatus.CREATED,
       body: successBody,
     };
+  }
+
+  async confirmStepUp(user: JwtAccessPayload, challengeId: string, otp: string) {
+    const redisKey = `stepup:transfer:${user.sub}:${challengeId}`;
+    const stored = await this.redis.redis.get(redisKey);
+    
+    if (!stored) {
+      throw new BadRequestException('Challenge expired or not found');
+    }
+    
+    const data = JSON.parse(stored);
+    if (data.otp !== otp) {
+      throw new BadRequestException('Invalid OTP');
+    }
+    
+    await this.redis.redis.del(redisKey);
+    
+    if (data.payload.type === 'INTERNAL_TRANSFER') {
+      return this.transfer(user, data.payload.requestBody as CreateTransferDto, data.payload.idempotencyKey, true);
+    } else if (data.payload.type === 'BENEFICIARY_TRANSFER') {
+      return this.transferToBeneficiary(user, data.payload.requestBody as TransferToBeneficiaryDto, data.payload.idempotencyKey, true);
+    } else {
+      throw new BadRequestException('Unknown transfer type');
+    }
   }
 }

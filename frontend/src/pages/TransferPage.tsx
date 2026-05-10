@@ -2,7 +2,7 @@ import { type FormEvent, useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { type Account, getAccounts } from '../api/accounts';
 import { ApiError } from '../api/client';
-import { transfer, transferToBeneficiary, type TransferResponse } from '../api/payments';
+import { transfer, transferToBeneficiary, confirmStepUp, type TransferResponse } from '../api/payments';
 import type { TransferToBeneficiaryResponse } from '../api/payments';
 import { type Beneficiary, getBeneficiaries } from '../api/beneficiaries';
 import { UserMe, getMe } from '../api/auth';
@@ -30,6 +30,11 @@ export default function TransferPage() {
   const [errorMsg, setErrorMsg] = useState('');
   const [result, setResult] = useState<TransferResponse | TransferToBeneficiaryResponse | null>(null);
   const [me, setMe] = useState<UserMe | null>(null);
+
+  const [stepUpChallengeId, setStepUpChallengeId] = useState('');
+  const [stepUpOtp, setStepUpOtp] = useState('');
+  const [stepUpError, setStepUpError] = useState('');
+  const [isConfirming, setIsConfirming] = useState(false);
 
   const [transferMode, setTransferMode] = useState<'own' | 'beneficiary'>('own');
   const [beneficiaries, setBeneficiaries] = useState<Beneficiary[]>([]);
@@ -88,6 +93,9 @@ export default function TransferPage() {
       if (err instanceof ApiError) {
         const raw = err.data as Record<string, unknown> | null;
         if (raw?.code === 'STEP_UP_REQUIRED') {
+          setStepUpChallengeId(raw.challengeId as string);
+          setStepUpOtp('');
+          setStepUpError('');
           setStatus('step_up');
           return;
         }
@@ -104,6 +112,26 @@ export default function TransferPage() {
     }
   }
 
+  async function handleConfirmStepUp(e: FormEvent) {
+    e.preventDefault();
+    if (!accessToken || !stepUpChallengeId) return;
+    setIsConfirming(true);
+    setStepUpError('');
+    try {
+      const res = await confirmStepUp(accessToken, { challengeId: stepUpChallengeId, otp: stepUpOtp });
+      setResult(res as any);
+      setStatus('success');
+    } catch (err) {
+      if (err instanceof ApiError) {
+        setStepUpError(err.message);
+      } else {
+        setStepUpError('Failed to confirm step-up.');
+      }
+    } finally {
+      setIsConfirming(false);
+    }
+  }
+
   function resetForm() {
     setStatus('idle');
     setResult(null);
@@ -111,6 +139,9 @@ export default function TransferPage() {
     setAmount('');
     setDescription('');
     setIdemKey(newIdemKey());
+    setStepUpChallengeId('');
+    setStepUpOtp('');
+    setStepUpError('');
   }
 
   const isLoading = status === 'loading';
@@ -129,6 +160,7 @@ export default function TransferPage() {
           <button className="btn btn-ghost" onClick={() => navigate('/cards')}>Cards</button>
           <button className="btn btn-ghost" onClick={() => navigate('/transfer')}>Transfer</button>
           <button className="btn btn-ghost" onClick={() => navigate('/transactions')}>History</button>
+          <button className="btn btn-ghost" onClick={() => navigate('/statements')}>Statements</button>
           <button className="btn btn-ghost" onClick={() => navigate('/beneficiaries')}>Beneficiaries</button>
           <button className="btn btn-ghost" onClick={() => navigate('/admin/customers')}>Admin</button>
         </div>
@@ -316,6 +348,41 @@ export default function TransferPage() {
           )}
         </div>
       </main>
+
+      {status === 'step_up' && (
+        <div style={{
+          position: 'fixed', top: 0, left: 0, right: 0, bottom: 0,
+          background: 'rgba(0,0,0,0.6)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 100
+        }}>
+          <div className="card" style={{ padding: 32, width: 400, maxWidth: '90%' }}>
+            <h3 style={{ marginBottom: 16 }}>Additional Verification Required</h3>
+            <p className="text-sm text-muted" style={{ marginBottom: 16 }}>
+              This transfer requires step-up authentication. An OTP has been generated (check backend logs).
+            </p>
+            {stepUpError && <div className="alert alert-error" style={{ marginBottom: 16 }}>⚠️ {stepUpError}</div>}
+            <form onSubmit={handleConfirmStepUp}>
+              <div className="field">
+                <label>Enter 6-digit OTP</label>
+                <input
+                  type="text"
+                  maxLength={6}
+                  value={stepUpOtp}
+                  onChange={(e) => setStepUpOtp(e.target.value.replace(/\D/g, ''))}
+                  required
+                />
+              </div>
+              <div className="flex gap-8" style={{ marginTop: 24 }}>
+                <button type="submit" className="btn btn-primary" style={{ flex: 1 }} disabled={stepUpOtp.length !== 6 || isConfirming}>
+                  {isConfirming ? 'Verifying...' : 'Confirm'}
+                </button>
+                <button type="button" className="btn btn-secondary" style={{ flex: 1 }} onClick={() => { setStatus('idle'); setStepUpError(''); }} disabled={isConfirming}>
+                  Cancel
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
