@@ -141,6 +141,7 @@ export default function TransactionsPage() {
           <button className="btn btn-ghost" onClick={() => navigate('/statements')}>Statements</button>
           <button className="btn btn-ghost" onClick={() => navigate('/beneficiaries')}>Beneficiaries</button>
           <button className="btn btn-ghost" onClick={() => navigate('/notifications')}>Notifications</button>
+          <button className="btn btn-ghost" onClick={() => navigate('/security')}>Security</button>
           <button className="btn btn-ghost" onClick={() => navigate('/admin/customers')}>Admin</button>
           <div className="user-chip"><span className="dot" />{email}</div>
           <button id="btn-logout-txns" className="btn btn-ghost" onClick={() => { logout(); navigate('/'); }}>

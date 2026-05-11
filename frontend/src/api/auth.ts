@@ -46,3 +46,20 @@ export interface UserMe {
 
 export const getMe = (token: string) =>
   apiFetch<UserMe>('/auth/me', { token });
+
+export interface SessionInfo {
+  id: string;
+  userAgent: string | null;
+  ipAddress: string | null;
+  createdAt: string;
+  expiresAt: string;
+  revokedAt: string | null;
+  isCurrent?: boolean;
+  isActive?: boolean;
+}
+
+export const getSessions = (token: string) =>
+  apiFetch<SessionInfo[]>('/auth/sessions', { token });
+
+export const revokeSession = (token: string, id: string) =>
+  apiFetch<SessionInfo>(`/auth/sessions/${id}`, { method: 'DELETE', token });

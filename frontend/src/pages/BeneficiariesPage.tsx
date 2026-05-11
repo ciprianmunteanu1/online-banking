@@ -131,6 +131,7 @@ export default function BeneficiariesPage() {
           <button className="btn btn-ghost" onClick={() => navigate('/statements')}>Statements</button>
           <button className="btn btn-ghost" onClick={() => navigate('/beneficiaries')} style={{ color: 'var(--accent)', background: 'rgba(99,102,241,0.1)' }}>Beneficiaries</button>
           <button className="btn btn-ghost" onClick={() => navigate('/notifications')}>Notifications</button>
+          <button className="btn btn-ghost" onClick={() => navigate('/security')}>Security</button>
           <button className="btn btn-ghost" onClick={() => navigate('/admin/customers')}>Admin</button>
           <div className="user-chip"><span className="dot" />{email}</div>
           <button id="btn-logout-bene" className="btn btn-ghost" onClick={() => { logout(); navigate('/'); }}>

@@ -11,6 +11,7 @@ import TransferPage from './pages/TransferPage';
 import CardsPage from './pages/CardsPage';
 import StatementsPage from './pages/StatementsPage';
 import AdminCustomersPage from './pages/AdminCustomersPage';
+import SecurityPage from './pages/SecurityPage';
 import { NotificationsPage } from './pages/NotificationsPage';
 import { NotificationToaster } from './components/NotificationToaster';
 
@@ -54,6 +55,10 @@ export default function App() {
           <Route
             path="/notifications"
             element={<ProtectedRoute><NotificationsPage /></ProtectedRoute>}
+          />
+          <Route
+            path="/security"
+            element={<ProtectedRoute><SecurityPage /></ProtectedRoute>}
           />
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
