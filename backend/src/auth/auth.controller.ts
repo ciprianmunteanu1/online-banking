@@ -1,4 +1,14 @@
-import { Body, Controller, Post, Req, UseGuards, Get } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  Delete,
+  Get,
+  Param,
+  ParseUUIDPipe,
+  Post,
+  Req,
+  UseGuards,
+} from '@nestjs/common';
 import type { Request } from 'express';
 import type { JwtAccessPayload } from './auth.types';
 import { AuthService } from './auth.service';
@@ -26,7 +36,10 @@ export class AuthController {
   @UseGuards(JwtAuthGuard)
   verifyMfa(@Req() req: Request, @Body() dto: VerifyMfaDto) {
     const user = req.user as JwtAccessPayload;
-    return this.auth.verifyMfa(user, dto.otp);
+    return this.auth.verifyMfa(user, dto.otp, {
+      userAgent: req.get('user-agent') ?? null,
+      ipAddress: req.ip ?? null,
+    });
   }
 
   @Get('me')
@@ -34,5 +47,25 @@ export class AuthController {
   getMe(@Req() req: Request) {
     const user = req.user as JwtAccessPayload;
     return this.auth.getMe(user.sub);
+  }
+
+  @Get('sessions')
+  @UseGuards(JwtAuthGuard, MfaVerifiedGuard)
+  getSessions(@Req() req: Request) {
+    const user = req.user as JwtAccessPayload;
+    return this.auth.getSessions(user.sub, user.sessionId);
+  }
+
+  @Delete('sessions/:id')
+  @UseGuards(JwtAuthGuard, MfaVerifiedGuard)
+  revokeSession(
+    @Req() req: Request,
+    @Param('id', ParseUUIDPipe) sessionId: string,
+  ) {
+    const user = req.user as JwtAccessPayload;
+    return this.auth.revokeSession(user.sub, sessionId, {
+      userAgent: req.get('user-agent') ?? null,
+      ipAddress: req.ip ?? null,
+    });
   }
 }

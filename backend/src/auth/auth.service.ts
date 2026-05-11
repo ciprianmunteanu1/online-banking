@@ -2,6 +2,7 @@ import {
   BadRequestException,
   ConflictException,
   Injectable,
+  NotFoundException,
   UnauthorizedException,
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
@@ -18,6 +19,11 @@ import type { RegisterDto } from './dto/register.dto';
 
 const MFA_OTP_TTL_SECONDS = 300;
 const MFA_REDIS_PREFIX = 'mfa:otp:';
+
+type RequestMeta = {
+  userAgent: string | null;
+  ipAddress: string | null;
+};
 
 function generateDemoIban(): string {
   return 'RO00BANK' + randomBytes(8).toString('hex').toUpperCase();
@@ -69,7 +75,7 @@ export class AuthService {
     };
   }
 
-  async verifyMfa(userPayload: JwtAccessPayload, otp: string) {
+  async verifyMfa(userPayload: JwtAccessPayload, otp: string, meta?: RequestMeta) {
     if (userPayload.mfaVerified) {
       throw new BadRequestException('MFA already completed for this token');
     }
@@ -91,10 +97,12 @@ export class AuthService {
     const refreshTokenHash = await bcrypt.hash(refreshSecret, 10);
     const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000);
 
-    await this.prisma.session.create({
+    const session = await this.prisma.session.create({
       data: {
         userId: user.id,
         refreshTokenHash,
+        userAgent: meta?.userAgent,
+        ipAddress: meta?.ipAddress,
         expiresAt,
       },
     });
@@ -106,6 +114,7 @@ export class AuthService {
         sub: user.id,
         email: user.email,
         mfaVerified: true,
+        sessionId: session.id,
       } satisfies JwtAccessPayload,
       { expiresIn: accessExpires },
     );
@@ -205,5 +214,63 @@ export class AuthService {
       kycStatus: user.customerProfile?.kycStatus,
       verifiedAt: user.customerProfile?.verifiedAt,
     };
+  }
+
+  async getSessions(userId: string, currentSessionId?: string) {
+    const sessions = await this.prisma.session.findMany({
+      where: { userId },
+      orderBy: { createdAt: 'desc' },
+      select: {
+        id: true,
+        userAgent: true,
+        ipAddress: true,
+        createdAt: true,
+        expiresAt: true,
+        revokedAt: true,
+      },
+    });
+
+    return sessions.map((session) => ({
+      ...session,
+      isCurrent: currentSessionId === session.id,
+      isActive: !session.revokedAt && session.expiresAt > new Date(),
+    }));
+  }
+
+  async revokeSession(userId: string, sessionId: string, meta?: RequestMeta) {
+    const session = await this.prisma.session.findFirst({
+      where: { id: sessionId, userId },
+    });
+
+    if (!session) {
+      throw new NotFoundException('Session not found');
+    }
+
+    const revokedAt = session.revokedAt ?? new Date();
+    const updated = await this.prisma.session.update({
+      where: { id: session.id },
+      data: { revokedAt },
+      select: {
+        id: true,
+        userAgent: true,
+        ipAddress: true,
+        createdAt: true,
+        expiresAt: true,
+        revokedAt: true,
+      },
+    });
+
+    await this.prisma.auditEvent.create({
+      data: {
+        actorUserId: userId,
+        action: 'SESSION_REVOKED',
+        resourceType: 'Session',
+        resourceId: session.id,
+        ipAddress: meta?.ipAddress,
+        userAgent: meta?.userAgent,
+      },
+    });
+
+    return { ...updated, isActive: false };
   }
 }
