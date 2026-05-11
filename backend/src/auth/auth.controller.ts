@@ -9,6 +9,7 @@ import {
   Req,
   UseGuards,
 } from '@nestjs/common';
+import { Throttle } from '@nestjs/throttler';
 import type { Request } from 'express';
 import type { JwtAccessPayload } from './auth.types';
 import { AuthService } from './auth.service';
@@ -28,11 +29,13 @@ export class AuthController {
   }
 
   @Post('login')
+  @Throttle({ default: { limit: 10, ttl: 60_000 } })
   login(@Body() dto: LoginDto) {
     return this.auth.login(dto);
   }
 
   @Post('verify-mfa')
+  @Throttle({ default: { limit: 10, ttl: 60_000 } })
   @UseGuards(JwtAuthGuard)
   verifyMfa(@Req() req: Request, @Body() dto: VerifyMfaDto) {
     const user = req.user as JwtAccessPayload;

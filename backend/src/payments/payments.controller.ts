@@ -8,6 +8,7 @@ import {
   UseFilters,
   UseGuards,
 } from '@nestjs/common';
+import { Throttle } from '@nestjs/throttler';
 import type { Request, Response } from 'express';
 import type { JwtAccessPayload } from '../auth/auth.types';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
@@ -25,6 +26,7 @@ export class PaymentsController {
   constructor(private readonly payments: PaymentsService) {}
 
   @Post('transfer')
+  @Throttle({ default: { limit: 20, ttl: 60_000 } })
   @UseGuards(JwtAuthGuard, MfaVerifiedGuard)
   async transfer(
     @Req() req: Request,
@@ -39,6 +41,7 @@ export class PaymentsController {
   }
 
   @Post('transfer-to-beneficiary')
+  @Throttle({ default: { limit: 20, ttl: 60_000 } })
   @UseGuards(JwtAuthGuard, MfaVerifiedGuard)
   async transferToBeneficiary(
     @Req() req: Request,
@@ -53,6 +56,7 @@ export class PaymentsController {
   }
 
   @Post('pay-merchant')
+  @Throttle({ default: { limit: 20, ttl: 60_000 } })
   @UseGuards(JwtAuthGuard, MfaVerifiedGuard)
   async payMerchant(
     @Req() req: Request,
@@ -67,6 +71,7 @@ export class PaymentsController {
   }
 
   @Post('confirm-step-up')
+  @Throttle({ default: { limit: 20, ttl: 60_000 } })
   @UseGuards(JwtAuthGuard, MfaVerifiedGuard)
   async confirmStepUp(
     @Req() req: Request,

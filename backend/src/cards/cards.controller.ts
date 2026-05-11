@@ -1,4 +1,5 @@
 import { Controller, Get, Post, Patch, Delete, Param, Body, Req, UseGuards } from '@nestjs/common';
+import { Throttle } from '@nestjs/throttler';
 import type { Request } from 'express';
 import { CardsService } from './cards.service';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
@@ -43,12 +44,14 @@ export class CardsController {
   }
 
   @Post(':id/reveal/initiate')
+  @Throttle({ default: { limit: 20, ttl: 60_000 } })
   initiateReveal(@Req() req: Request, @Param('id') id: string) {
     const user = req.user as JwtAccessPayload;
     return this.cardsService.initiateReveal(user.sub, id);
   }
 
   @Post(':id/reveal/verify')
+  @Throttle({ default: { limit: 20, ttl: 60_000 } })
   verifyReveal(@Req() req: Request, @Param('id') id: string, @Body() dto: VerifyRevealDto) {
     const user = req.user as JwtAccessPayload;
     return this.cardsService.verifyReveal(user.sub, id, dto);
