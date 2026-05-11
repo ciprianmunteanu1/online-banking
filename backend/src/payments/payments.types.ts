@@ -29,3 +29,18 @@ export type BeneficiaryTransferServiceResult = {
   httpStatus: number;
   body: BeneficiaryTransferSuccessResponse;
 };
+
+export type MerchantPaymentSuccessResponse = {
+  transactionId: string;
+  status: string;
+  sourceAccountId: string;
+  merchantId: string;
+  amount: string;
+  currency: string;
+  ledgerBalanced: true;
+};
+
+export type MerchantPaymentServiceResult = {
+  httpStatus: number;
+  body: MerchantPaymentSuccessResponse;
+};

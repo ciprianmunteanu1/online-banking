@@ -13,6 +13,7 @@ import { RedisModule } from './redis/redis.module';
 import { CardsModule } from './cards/cards.module';
 import { StatementsModule } from './statements/statements.module';
 import { NotificationsModule } from './notifications/notifications.module';
+import { MerchantsModule } from './merchants/merchants.module';
 
 @Module({
   imports: [
@@ -28,6 +29,7 @@ import { NotificationsModule } from './notifications/notifications.module';
     CardsModule,
     StatementsModule,
     NotificationsModule,
+    MerchantsModule,
   ],
   controllers: [AppController],
   providers: [AppService],

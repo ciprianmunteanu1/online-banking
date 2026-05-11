@@ -19,16 +19,20 @@ import { PrismaService } from '../prisma/prisma.service';
 import { RedisService } from '../redis/redis.service';
 import type { JwtAccessPayload } from '../auth/auth.types';
 import type { CreateTransferDto } from './dto/create-transfer.dto';
+import type { PayMerchantDto } from './dto/pay-merchant.dto';
 import type { TransferToBeneficiaryDto } from './dto/transfer-to-beneficiary.dto';
 import type {
   TransferServiceResult,
   TransferSuccessResponse,
   BeneficiaryTransferServiceResult,
   BeneficiaryTransferSuccessResponse,
+  MerchantPaymentServiceResult,
+  MerchantPaymentSuccessResponse,
 } from './payments.types';
 import { StepUpRequiredException } from './exceptions/step-up-required.exception';
 
 const TRANSFER_SCOPE = 'POST /payments/transfer';
+const MERCHANT_PAYMENT_SCOPE = 'POST /payments/pay-merchant';
 const STEP_UP_THRESHOLD = new Prisma.Decimal(1000);
 const IDEMPOTENCY_TTL_MS = 24 * 60 * 60 * 1000;
 const SERIALIZABLE_RETRIES = 5;
@@ -76,6 +80,20 @@ function stableBeneficiaryRequestHash(
     currency: currencyNorm,
     description: dto.description ?? null,
     beneficiaryId: dto.beneficiaryId,
+    sourceAccountId: dto.sourceAccountId,
+  });
+  return createHash('sha256').update(canonical).digest('hex');
+}
+
+function stableMerchantRequestHash(
+  dto: PayMerchantDto,
+  currencyNorm: string,
+): string {
+  const canonical = JSON.stringify({
+    amount: dto.amount,
+    currency: currencyNorm,
+    description: dto.description ?? null,
+    merchantId: dto.merchantId,
     sourceAccountId: dto.sourceAccountId,
   });
   return createHash('sha256').update(canonical).digest('hex');
@@ -143,6 +161,35 @@ function parseBeneficiaryCompletedPayload(
   return null;
 }
 
+function parseMerchantCompletedPayload(
+  raw: Prisma.JsonValue | null | undefined,
+): MerchantPaymentSuccessResponse | null {
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) {
+    return null;
+  }
+  const o = raw as Record<string, unknown>;
+  if (
+    typeof o.transactionId === 'string' &&
+    typeof o.status === 'string' &&
+    typeof o.sourceAccountId === 'string' &&
+    typeof o.merchantId === 'string' &&
+    typeof o.amount === 'string' &&
+    typeof o.currency === 'string' &&
+    o.ledgerBalanced === true
+  ) {
+    return {
+      transactionId: o.transactionId,
+      status: o.status,
+      sourceAccountId: o.sourceAccountId,
+      merchantId: o.merchantId,
+      amount: o.amount,
+      currency: o.currency,
+      ledgerBalanced: true,
+    };
+  }
+  return null;
+}
+
 import { NotificationsService } from '../notifications/notifications.service';
 
 @Injectable()
@@ -159,7 +206,7 @@ export class PaymentsService {
     userId: string,
     idempotencyKey: string,
     amount: Prisma.Decimal,
-    type: 'INTERNAL_TRANSFER' | 'BENEFICIARY_TRANSFER',
+    type: 'INTERNAL_TRANSFER' | 'BENEFICIARY_TRANSFER' | 'MERCHANT_PAYMENT',
     requestBody: any,
   ): Promise<void> {
     if (amount.gt(STEP_UP_THRESHOLD)) {
@@ -788,6 +835,237 @@ export class PaymentsService {
     };
   }
 
+  async payMerchant(
+    user: JwtAccessPayload,
+    dto: PayMerchantDto,
+    idempotencyKey: string,
+    skipFraudCheck = false,
+  ): Promise<MerchantPaymentServiceResult> {
+    if (!idempotencyKey.trim()) {
+      throw new BadRequestException('x-idempotency-key header is required');
+    }
+
+    const profile = await this.prisma.customerProfile.findUnique({
+      where: { userId: user.sub },
+      select: { id: true, kycStatus: true },
+    });
+
+    if (!profile || profile.kycStatus !== 'VERIFIED') {
+      throw new ForbiddenException({
+        code: 'KYC_REQUIRED',
+        message: 'Customer identity verification is required before merchant payments.',
+      });
+    }
+
+    const currency = (dto.currency ?? 'RON').trim().toUpperCase();
+    if (currency !== 'RON') {
+      throw new BadRequestException('Only RON currency is supported in MVP');
+    }
+
+    const amountDecimal = new Prisma.Decimal(dto.amount);
+    if (amountDecimal.lte(0)) {
+      throw new BadRequestException('Amount must be greater than zero');
+    }
+
+    if (!skipFraudCheck) {
+      await this.runMockFraudCheck(user.sub, idempotencyKey.trim(), amountDecimal, 'MERCHANT_PAYMENT', dto);
+    }
+
+    const requestHash = stableMerchantRequestHash(dto, currency);
+
+    for (let attempt = 1; attempt <= SERIALIZABLE_RETRIES; attempt += 1) {
+      try {
+        return await this.prisma.$transaction(
+          async (tx: Prisma.TransactionClient) =>
+            this.executeMerchantPaymentTx(
+              tx,
+              user.sub,
+              profile.id,
+              dto,
+              idempotencyKey.trim(),
+              currency,
+              amountDecimal,
+              requestHash,
+            ),
+          {
+            isolationLevel: Prisma.TransactionIsolationLevel.Serializable,
+            maxWait: 10_000,
+            timeout: 30_000,
+          },
+        );
+      } catch (err) {
+        if (isSerializationFailure(err) && attempt < SERIALIZABLE_RETRIES) continue;
+        throw err;
+      }
+    }
+    throw new BadRequestException('Merchant payment failed after retries');
+  }
+
+  private async executeMerchantPaymentTx(
+    tx: Prisma.TransactionClient,
+    userId: string,
+    profileId: string,
+    dto: PayMerchantDto,
+    idempotencyKey: string,
+    currency: string,
+    amountDecimal: Prisma.Decimal,
+    requestHash: string,
+  ): Promise<MerchantPaymentServiceResult> {
+    const existingKey = await tx.idempotencyKey.findUnique({
+      where: { userId_key: { userId, key: idempotencyKey } },
+    });
+
+    if (existingKey) {
+      if (existingKey.requestHash !== requestHash) {
+        throw new ConflictException('Idempotency key reused with different request payload');
+      }
+      if (existingKey.status === IdempotencyStatus.COMPLETED) {
+        const payload = parseMerchantCompletedPayload(existingKey.responsePayload);
+        if (payload) return { httpStatus: HttpStatus.OK, body: payload };
+      }
+      if (existingKey.status === IdempotencyStatus.FAILED) {
+        throw new BadRequestException('Previous attempt with this key failed');
+      }
+      throw new ConflictException('A request with this key is currently in progress');
+    }
+
+    const idemRow = await tx.idempotencyKey.create({
+      data: {
+        userId,
+        key: idempotencyKey,
+        scope: MERCHANT_PAYMENT_SCOPE,
+        requestHash,
+        status: IdempotencyStatus.IN_PROGRESS,
+        expiresAt: new Date(Date.now() + IDEMPOTENCY_TTL_MS),
+      },
+    });
+
+    const sourceAccount = await tx.account.findFirst({
+      where: {
+        id: dto.sourceAccountId,
+        customerId: profileId,
+        status: AccountStatus.ACTIVE,
+        currency,
+        isSystem: false,
+      },
+    });
+    if (!sourceAccount) throw new BadRequestException('Source account not found or invalid');
+
+    const merchant = await tx.merchant.findFirst({
+      where: { id: dto.merchantId, status: 'ACTIVE' },
+      include: { settlementAccount: true },
+    });
+    if (!merchant || merchant.settlementAccount.status !== AccountStatus.ACTIVE) {
+      throw new BadRequestException('Merchant not found or inactive');
+    }
+    if (merchant.settlementAccount.currency !== currency) {
+      throw new BadRequestException('Merchant settlement currency does not match request currency');
+    }
+
+    const sourceResult = await tx.account.updateMany({
+      where: {
+        id: sourceAccount.id,
+        customerId: profileId,
+        status: AccountStatus.ACTIVE,
+        currency,
+        isSystem: false,
+        availableBalance: { gte: amountDecimal },
+      },
+      data: { availableBalance: { decrement: amountDecimal } },
+    });
+
+    if (sourceResult.count !== 1) {
+      await tx.idempotencyKey.update({ where: { id: idemRow.id }, data: { status: IdempotencyStatus.FAILED } });
+      throw new BadRequestException('Insufficient funds');
+    }
+
+    await tx.account.update({
+      where: { id: merchant.settlementAccountId },
+      data: { availableBalance: { increment: amountDecimal } },
+    });
+
+    const now = new Date();
+    const transaction = await tx.transaction.create({
+      data: {
+        type: TransactionType.MERCHANT_PAYMENT,
+        status: TransactionStatus.POSTED,
+        amount: amountDecimal,
+        currency,
+        description: dto.description || null,
+        customerId: profileId,
+        fromAccountId: sourceAccount.id,
+        toAccountId: merchant.settlementAccountId,
+        idempotencyKeyId: idemRow.id,
+        postedAt: now,
+        ledgerEntries: {
+          create: [
+            {
+              accountId: sourceAccount.id,
+              side: LedgerSide.DEBIT,
+              amount: amountDecimal,
+              currency,
+              sequence: 0,
+            },
+            {
+              accountId: merchant.settlementAccountId,
+              side: LedgerSide.CREDIT,
+              amount: amountDecimal,
+              currency,
+              sequence: 1,
+            },
+          ],
+        },
+      },
+    });
+
+    const successBody: MerchantPaymentSuccessResponse = {
+      transactionId: transaction.id,
+      status: transaction.status,
+      sourceAccountId: sourceAccount.id,
+      merchantId: merchant.id,
+      amount: amountDecimal.toFixed(2),
+      currency,
+      ledgerBalanced: true,
+    };
+
+    await tx.idempotencyKey.update({
+      where: { id: idemRow.id },
+      data: {
+        status: IdempotencyStatus.COMPLETED,
+        responsePayload: successBody as unknown as Prisma.InputJsonValue,
+        httpStatus: HttpStatus.CREATED,
+        completedAt: now,
+      },
+    });
+
+    await tx.auditEvent.create({
+      data: {
+        actorUserId: userId,
+        action: 'MERCHANT_PAYMENT_POSTED',
+        resourceType: 'Transaction',
+        resourceId: transaction.id,
+        metadata: {
+          sourceAccountId: sourceAccount.id,
+          merchantId: merchant.id,
+          merchantCode: merchant.merchantCode,
+          amount: amountDecimal.toFixed(2),
+          currency,
+        },
+      },
+    });
+
+    await tx.notification.create({
+      data: {
+        userId,
+        type: 'MERCHANT_PAYMENT_POSTED',
+        title: 'Merchant Payment Posted',
+        message: `Your payment to ${merchant.name} of ${amountDecimal.toFixed(2)} ${currency} has been posted.`,
+      },
+    });
+
+    return { httpStatus: HttpStatus.CREATED, body: successBody };
+  }
+
   async confirmStepUp(user: JwtAccessPayload, challengeId: string, otp: string) {
     const redisKey = `stepup:transfer:${user.sub}:${challengeId}`;
     const stored = await this.redis.redis.get(redisKey);
@@ -807,6 +1085,8 @@ export class PaymentsService {
       return this.transfer(user, data.payload.requestBody as CreateTransferDto, data.payload.idempotencyKey, true);
     } else if (data.payload.type === 'BENEFICIARY_TRANSFER') {
       return this.transferToBeneficiary(user, data.payload.requestBody as TransferToBeneficiaryDto, data.payload.idempotencyKey, true);
+    } else if (data.payload.type === 'MERCHANT_PAYMENT') {
+      return this.payMerchant(user, data.payload.requestBody as PayMerchantDto, data.payload.idempotencyKey, true);
     } else {
       throw new BadRequestException('Unknown transfer type');
     }

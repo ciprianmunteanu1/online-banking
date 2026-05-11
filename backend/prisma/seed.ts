@@ -111,6 +111,62 @@ async function main() {
     },
   });
 
+  const demoMerchants = [
+    {
+      name: 'Mega Market',
+      merchantCode: 'MEGA_MARKET',
+      category: 'GROCERY',
+      iban: 'RO00MERCH000000000000001',
+    },
+    {
+      name: 'Uni Cafe',
+      merchantCode: 'UNI_CAFE',
+      category: 'FOOD_DRINK',
+      iban: 'RO00MERCH000000000000002',
+    },
+    {
+      name: 'BookHub',
+      merchantCode: 'BOOKHUB',
+      category: 'BOOKS',
+      iban: 'RO00MERCH000000000000003',
+    },
+  ];
+
+  for (const merchant of demoMerchants) {
+    const settlementAccount = await prisma.account.upsert({
+      where: { iban: merchant.iban },
+      create: {
+        customerId: adminProfile.id,
+        iban: merchant.iban,
+        currency: 'RON',
+        accountType: 'MERCHANT_SETTLEMENT',
+        availableBalance: 0,
+        isSystem: true,
+      },
+      update: {
+        accountType: 'MERCHANT_SETTLEMENT',
+        isSystem: true,
+      },
+    });
+
+    await prisma.merchant.upsert({
+      where: { merchantCode: merchant.merchantCode },
+      create: {
+        name: merchant.name,
+        merchantCode: merchant.merchantCode,
+        category: merchant.category,
+        settlementAccountId: settlementAccount.id,
+        status: 'ACTIVE',
+      },
+      update: {
+        name: merchant.name,
+        category: merchant.category,
+        settlementAccountId: settlementAccount.id,
+        status: 'ACTIVE',
+      },
+    });
+  }
+
   const sourceIban = 'RO49BKCH0000000011110001';
   const destIban = 'RO49BKCH0000000022220002';
 
@@ -193,6 +249,7 @@ async function main() {
   console.log(`SOURCE_ACCOUNT_ID=${sourceAccount.id}`);
   console.log(`DEST_ACCOUNT_ID=${destAccount.id}`);
   console.log(`SYSTEM_ACCOUNT_ID=${systemAccount.id}`);
+  console.log(`MERCHANTS=${demoMerchants.map((m) => m.merchantCode).join(',')}`);
 }
 
 main()

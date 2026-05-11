@@ -14,6 +14,7 @@ import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { MfaVerifiedGuard } from '../auth/guards/mfa-verified.guard';
 import { CreateTransferDto } from './dto/create-transfer.dto';
 import { TransferToBeneficiaryDto } from './dto/transfer-to-beneficiary.dto';
+import { PayMerchantDto } from './dto/pay-merchant.dto';
 import { ConfirmStepUpDto } from './dto/confirm-step-up.dto';
 import { StepUpRequiredFilter } from './filters/step-up-required.filter';
 import { PaymentsService } from './payments.service';
@@ -47,6 +48,20 @@ export class PaymentsController {
   ) {
     const user = req.user as JwtAccessPayload;
     const result = await this.payments.transferToBeneficiary(user, dto, idempotencyKey ?? '');
+    res.status(result.httpStatus);
+    return result.body;
+  }
+
+  @Post('pay-merchant')
+  @UseGuards(JwtAuthGuard, MfaVerifiedGuard)
+  async payMerchant(
+    @Req() req: Request,
+    @Body() dto: PayMerchantDto,
+    @Headers('x-idempotency-key') idempotencyKey: string | undefined,
+    @Res({ passthrough: true }) res: Response,
+  ) {
+    const user = req.user as JwtAccessPayload;
+    const result = await this.payments.payMerchant(user, dto, idempotencyKey ?? '');
     res.status(result.httpStatus);
     return result.body;
   }
