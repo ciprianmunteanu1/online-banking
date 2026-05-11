@@ -11,6 +11,7 @@ import TransferPage from './pages/TransferPage';
 import CardsPage from './pages/CardsPage';
 import StatementsPage from './pages/StatementsPage';
 import AdminCustomersPage from './pages/AdminCustomersPage';
+import AdminAuditPage from './pages/AdminAuditPage';
 import SecurityPage from './pages/SecurityPage';
 import { NotificationsPage } from './pages/NotificationsPage';
 import { NotificationToaster } from './components/NotificationToaster';
@@ -51,6 +52,10 @@ export default function App() {
           <Route
             path="/admin/customers"
             element={<ProtectedRoute><AdminCustomersPage /></ProtectedRoute>}
+          />
+          <Route
+            path="/admin/audit"
+            element={<ProtectedRoute><AdminAuditPage /></ProtectedRoute>}
           />
           <Route
             path="/notifications"

@@ -140,6 +140,7 @@ export default function AdminCustomersPage() {
           <button className="btn btn-ghost" onClick={() => navigate('/notifications')}>Notifications</button>
           <button className="btn btn-ghost" onClick={() => navigate('/security')}>Security</button>
           <button className="btn btn-ghost" onClick={() => navigate('/admin/customers')} style={{ color: 'var(--accent)', background: 'rgba(99,102,241,0.1)' }}>Customers</button>
+          <button className="btn btn-ghost" onClick={() => navigate('/admin/audit')}>Audit</button>
           <div className="user-chip"><span className="dot" />{email}</div>
           <button className="btn btn-ghost" onClick={() => { logout(); navigate('/'); }}>Sign out</button>
         </div>
