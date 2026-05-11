@@ -11,11 +11,14 @@ import TransferPage from './pages/TransferPage';
 import CardsPage from './pages/CardsPage';
 import StatementsPage from './pages/StatementsPage';
 import AdminCustomersPage from './pages/AdminCustomersPage';
+import { NotificationsPage } from './pages/NotificationsPage';
+import { NotificationToaster } from './components/NotificationToaster';
 
 export default function App() {
   return (
     <AuthProvider>
       <BrowserRouter>
+        <NotificationToaster />
         <Routes>
           <Route path="/" element={<LoginPage />} />
           <Route path="/register" element={<RegisterPage />} />
@@ -47,6 +50,10 @@ export default function App() {
           <Route
             path="/admin/customers"
             element={<ProtectedRoute><AdminCustomersPage /></ProtectedRoute>}
+          />
+          <Route
+            path="/notifications"
+            element={<ProtectedRoute><NotificationsPage /></ProtectedRoute>}
           />
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>

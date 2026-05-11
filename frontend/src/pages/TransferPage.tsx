@@ -162,6 +162,7 @@ export default function TransferPage() {
           <button className="btn btn-ghost" onClick={() => navigate('/transactions')}>History</button>
           <button className="btn btn-ghost" onClick={() => navigate('/statements')}>Statements</button>
           <button className="btn btn-ghost" onClick={() => navigate('/beneficiaries')}>Beneficiaries</button>
+          <button className="btn btn-ghost" onClick={() => navigate('/notifications')}>Notifications</button>
           <button className="btn btn-ghost" onClick={() => navigate('/admin/customers')}>Admin</button>
         </div>
         <div className="user-chip"><span className="dot" />{email}</div>

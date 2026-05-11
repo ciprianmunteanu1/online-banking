@@ -617,6 +617,7 @@ export class PaymentsService {
         currency,
         isSystem: false,
       },
+      include: { customer: { include: { user: true } } },
     });
     if (!sourceAccount) throw new BadRequestException('Source account not found or invalid');
     if (sourceAccount.availableBalance.lt(amountDecimal)) {
@@ -644,6 +645,11 @@ export class PaymentsService {
         currency,
         isSystem: false,
       },
+      include: {
+        customer: {
+          include: { user: true }
+        }
+      }
     });
 
     if (matchedInternal) {
@@ -765,6 +771,16 @@ export class PaymentsService {
       'Transfer Successful',
       `Your transfer to ${beneficiary.displayName} of ${amountDecimal.toFixed(2)} ${currency} has been posted.`
     );
+
+    if (internalBeneficiary && matchedInternal && matchedInternal.customer.userId !== userId) {
+      const senderLabel = sourceAccount?.customer?.fullLegalName ?? sourceAccount?.customer?.user?.email ?? 'another user';
+      await this.notifications.create(
+        matchedInternal.customer.userId,
+        'INCOMING_TRANSFER_RECEIVED',
+        'Incoming Transfer Received',
+        `You received ${amountDecimal.toFixed(2)} ${currency} from ${senderLabel}.`
+      );
+    }
 
     return {
       httpStatus: HttpStatus.CREATED,
