@@ -60,8 +60,18 @@ export interface ConfirmStepUpRequest {
   otp: string;
 }
 
+export interface MerchantPaymentResponse {
+  transactionId: string;
+  status: string;
+  sourceAccountId: string;
+  merchantId: string;
+  amount: string;
+  currency: string;
+  ledgerBalanced: boolean;
+}
+
 export const confirmStepUp = (token: string, body: ConfirmStepUpRequest) =>
-  apiFetch<TransferResponse | TransferToBeneficiaryResponse>('/payments/confirm-step-up', {
+  apiFetch<TransferResponse | TransferToBeneficiaryResponse | MerchantPaymentResponse>('/payments/confirm-step-up', {
     method: 'POST',
     token,
     body,

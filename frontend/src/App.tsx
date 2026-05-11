@@ -8,6 +8,7 @@ import DashboardPage from './pages/DashboardPage';
 import RegisterPage from './pages/RegisterPage';
 import TransactionsPage from './pages/TransactionsPage';
 import TransferPage from './pages/TransferPage';
+import MerchantPayPage from './pages/MerchantPayPage';
 import CardsPage from './pages/CardsPage';
 import StatementsPage from './pages/StatementsPage';
 import AdminCustomersPage from './pages/AdminCustomersPage';
@@ -32,6 +33,10 @@ export default function App() {
           <Route
             path="/transfer"
             element={<ProtectedRoute><TransferPage /></ProtectedRoute>}
+          />
+          <Route
+            path="/merchants/pay"
+            element={<ProtectedRoute><MerchantPayPage /></ProtectedRoute>}
           />
           <Route
             path="/transactions"
