@@ -11,6 +11,7 @@ import * as bcrypt from 'bcrypt';
 import { randomBytes, randomInt } from 'crypto';
 import { PrismaService } from '../prisma/prisma.service';
 import { RedisService } from '../redis/redis.service';
+import { NotificationsService } from '../notifications/notifications.service';
 import type { JwtAccessPayload } from './auth.types';
 import type { LoginDto } from './dto/login.dto';
 import type { RegisterDto } from './dto/register.dto';
@@ -29,6 +30,7 @@ export class AuthService {
     private readonly redis: RedisService,
     private readonly jwt: JwtService,
     private readonly config: ConfigService,
+    private readonly notifications: NotificationsService,
   ) {}
 
   async login(dto: LoginDto) {
@@ -163,6 +165,13 @@ export class AuthService {
         metadata: { email: user.email, fullLegalName },
       },
     });
+
+    await this.notifications.create(
+      user.id,
+      'USER_REGISTERED',
+      'Welcome!',
+      'Your account has been successfully created.'
+    );
 
     return { message: 'Registration successful. You can now sign in.' };
   }

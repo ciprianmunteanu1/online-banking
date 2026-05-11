@@ -2,10 +2,14 @@ import { BadRequestException, Injectable, NotFoundException } from '@nestjs/comm
 import { PrismaService } from '../prisma/prisma.service';
 import { AccountStatus, KycStatus, TransactionStatus, TransactionType } from '@prisma/client';
 import { AdminCreditDto } from './dto/admin-credit.dto';
+import { NotificationsService } from '../notifications/notifications.service';
 
 @Injectable()
 export class AdminService {
-  constructor(private prisma: PrismaService) {}
+  constructor(
+    private prisma: PrismaService,
+    private notifications: NotificationsService
+  ) {}
 
   async getCustomers() {
     return this.prisma.customerProfile.findMany({
@@ -64,6 +68,13 @@ export class AdminService {
         resourceId: customer.id,
       },
     });
+
+    const title = status === KycStatus.VERIFIED ? 'KYC Verified' : 'KYC Rejected';
+    const message = status === KycStatus.VERIFIED
+      ? 'Your identity has been verified successfully.'
+      : 'Your identity verification was rejected. Please contact support.';
+    
+    await this.notifications.create(customer.userId, action, title, message);
 
     return updated;
   }
@@ -146,6 +157,13 @@ export class AdminService {
             metadata: { targetAccountId: targetAccount.id, amount, currency: 'RON' },
           },
         });
+
+        await this.notifications.create(
+          targetAccount.customer.userId,
+          'ACCOUNT_CREDITED_BY_ADMIN',
+          'Account Credited',
+          `Your account ${targetAccount.iban} has been credited with ${amount} RON by an administrator.`
+        );
 
         return {
           transactionId: transaction.id,

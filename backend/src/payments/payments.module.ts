@@ -4,9 +4,10 @@ import { RedisModule } from '../redis/redis.module';
 import { StepUpRequiredFilter } from './filters/step-up-required.filter';
 import { PaymentsController } from './payments.controller';
 import { PaymentsService } from './payments.service';
+import { NotificationsModule } from '../notifications/notifications.module';
 
 @Module({
-  imports: [AuthModule, RedisModule],
+  imports: [AuthModule, RedisModule, NotificationsModule],
   controllers: [PaymentsController],
   providers: [PaymentsService, StepUpRequiredFilter],
 })

@@ -12,21 +12,22 @@ datasource db {
 
 // Login identity. Staff may exist without a bank customer profile.
 model User {
-  id           String    @id @default(uuid()) @db.Uuid
-  email        String    @unique
+  id           String   @id @default(uuid()) @db.Uuid
+  email        String   @unique
   // Separate login name when email is not the username.
-  username     String?   @unique
-  passwordHash String    @map("password_hash")
-  isActive     Boolean   @default(true) @map("is_active")
-  mfaEnabled   Boolean   @default(false) @map("mfa_enabled")
-  createdAt    DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
-  updatedAt    DateTime  @updatedAt @map("updated_at") @db.Timestamptz(6)
+  username     String?  @unique
+  passwordHash String   @map("password_hash")
+  isActive     Boolean  @default(true) @map("is_active")
+  mfaEnabled   Boolean  @default(false) @map("mfa_enabled")
+  createdAt    DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt    DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
 
-  roles             Role[]
-  sessions          Session[]
-  customerProfile   CustomerProfile?
-  auditEvents       AuditEvent[]      @relation("AuditActor")
-  idempotencyKeys   IdempotencyKey[]
+  roles           Role[]
+  sessions        Session[]
+  customerProfile CustomerProfile?
+  auditEvents     AuditEvent[]     @relation("AuditActor")
+  idempotencyKeys IdempotencyKey[]
+  notifications   Notification[]
 
   @@map("users")
 }
@@ -64,22 +65,22 @@ model Session {
 
 // One bank customer per user; KYC-style fields.
 model CustomerProfile {
-  id               String   @id @default(uuid()) @db.Uuid
-  userId           String   @unique @map("user_id") @db.Uuid
-  fullLegalName    String   @map("full_legal_name")
-  phoneNumber      String?  @map("phone_number")
+  id               String    @id @default(uuid()) @db.Uuid
+  userId           String    @unique @map("user_id") @db.Uuid
+  fullLegalName    String    @map("full_legal_name")
+  phoneNumber      String?   @map("phone_number")
   // ISO 3166-1 alpha-2 when known.
-  countryCode      String?  @map("country_code") @db.Char(2)
-  addressLine1     String?  @map("address_line1")
-  addressLine2     String?  @map("address_line2")
+  countryCode      String?   @map("country_code") @db.Char(2)
+  addressLine1     String?   @map("address_line1")
+  addressLine2     String?   @map("address_line2")
   city             String?
-  postalCode       String?  @map("postal_code")
+  postalCode       String?   @map("postal_code")
   // Sensitive; mask or encrypt at the API boundary.
   nationalIdNumber String?   @map("national_id_number")
   kycStatus        KycStatus @default(PENDING) @map("kyc_status")
   verifiedAt       DateTime? @map("verified_at") @db.Timestamptz(6)
   createdAt        DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
-  updatedAt        DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+  updatedAt        DateTime  @updatedAt @map("updated_at") @db.Timestamptz(6)
 
   user          User          @relation(fields: [userId], references: [id], onDelete: Cascade)
   accounts      Account[]
@@ -106,8 +107,8 @@ model Account {
 
   customer         CustomerProfile @relation(fields: [customerId], references: [id], onDelete: Restrict)
   ledgerEntries    LedgerEntry[]
-  transactionsFrom Transaction[] @relation("TxnFromAccount")
-  transactionsTo   Transaction[] @relation("TxnToAccount")
+  transactionsFrom Transaction[]   @relation("TxnFromAccount")
+  transactionsTo   Transaction[]   @relation("TxnToAccount")
   cards            Card[]
 
   @@index([customerId])
@@ -134,28 +135,28 @@ model Beneficiary {
 
 // One business-level movement; ledger lines are created in the same atomic DB transaction.
 model Transaction {
-  id          String            @id @default(uuid()) @db.Uuid
-  type        TransactionType
-  status      TransactionStatus @default(PENDING)
-  amount      Decimal           @db.Decimal(19, 4)
-  currency    String            @db.Char(3)
-  reference   String?
-  description String?
+  id               String            @id @default(uuid()) @db.Uuid
+  type             TransactionType
+  status           TransactionStatus @default(PENDING)
+  amount           Decimal           @db.Decimal(19, 4)
+  currency         String            @db.Char(3)
+  reference        String?
+  description      String?
   // Who initiated (authorization scope).
-  customerId  String?           @map("customer_id") @db.Uuid
-  fromAccountId String?       @map("from_account_id") @db.Uuid
-  toAccountId   String?       @map("to_account_id") @db.Uuid
+  customerId       String?           @map("customer_id") @db.Uuid
+  fromAccountId    String?           @map("from_account_id") @db.Uuid
+  toAccountId      String?           @map("to_account_id") @db.Uuid
   // External counterparty when not an internal account.
-  externalIban  String?       @map("external_iban")
-  idempotencyKeyId String?   @unique @map("idempotency_key_id") @db.Uuid
-  createdAt   DateTime          @default(now()) @map("created_at") @db.Timestamptz(6)
-  postedAt    DateTime?         @map("posted_at") @db.Timestamptz(6)
+  externalIban     String?           @map("external_iban")
+  idempotencyKeyId String?           @unique @map("idempotency_key_id") @db.Uuid
+  createdAt        DateTime          @default(now()) @map("created_at") @db.Timestamptz(6)
+  postedAt         DateTime?         @map("posted_at") @db.Timestamptz(6)
 
-  customer        CustomerProfile? @relation(fields: [customerId], references: [id], onDelete: SetNull)
-  fromAccount     Account?         @relation("TxnFromAccount", fields: [fromAccountId], references: [id], onDelete: SetNull)
-  toAccount       Account?         @relation("TxnToAccount", fields: [toAccountId], references: [id], onDelete: SetNull)
-  idempotencyKey  IdempotencyKey?  @relation(fields: [idempotencyKeyId], references: [id], onDelete: SetNull)
-  ledgerEntries   LedgerEntry[]
+  customer       CustomerProfile? @relation(fields: [customerId], references: [id], onDelete: SetNull)
+  fromAccount    Account?         @relation("TxnFromAccount", fields: [fromAccountId], references: [id], onDelete: SetNull)
+  toAccount      Account?         @relation("TxnToAccount", fields: [toAccountId], references: [id], onDelete: SetNull)
+  idempotencyKey IdempotencyKey?  @relation(fields: [idempotencyKeyId], references: [id], onDelete: SetNull)
+  ledgerEntries  LedgerEntry[]
 
   @@index([customerId])
   @@index([status, createdAt])
@@ -184,21 +185,21 @@ model LedgerEntry {
 
 // Client idempotency key for sensitive writes; replay returns stored outcome.
 model IdempotencyKey {
-  id             String              @id @default(uuid()) @db.Uuid
-  key            String
-  userId         String              @map("user_id") @db.Uuid
+  id              String            @id @default(uuid()) @db.Uuid
+  key             String
+  userId          String            @map("user_id") @db.Uuid
   // e.g. route or operation name.
-  scope          String
-  requestHash    String?             @map("request_hash")
-  status         IdempotencyStatus   @default(IN_PROGRESS)
+  scope           String
+  requestHash     String?           @map("request_hash")
+  status          IdempotencyStatus @default(IN_PROGRESS)
   responsePayload Json?             @map("response_payload")
-  httpStatus     Int?                @map("http_status")
-  createdAt      DateTime            @default(now()) @map("created_at") @db.Timestamptz(6)
-  completedAt    DateTime?           @map("completed_at") @db.Timestamptz(6)
-  expiresAt      DateTime            @map("expires_at") @db.Timestamptz(6)
+  httpStatus      Int?              @map("http_status")
+  createdAt       DateTime          @default(now()) @map("created_at") @db.Timestamptz(6)
+  completedAt     DateTime?         @map("completed_at") @db.Timestamptz(6)
+  expiresAt       DateTime          @map("expires_at") @db.Timestamptz(6)
 
-  user         User          @relation(fields: [userId], references: [id], onDelete: Cascade)
-  transaction  Transaction?
+  user        User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  transaction Transaction?
 
   @@unique([userId, key], map: "idempotency_keys_user_id_key_uidx")
   @@index([userId, scope])
@@ -305,4 +306,19 @@ enum IdempotencyStatus {
   IN_PROGRESS
   COMPLETED
   FAILED
+}
+
+model Notification {
+  id        String    @id @default(uuid()) @db.Uuid
+  userId    String    @map("user_id") @db.Uuid
+  type      String
+  title     String
+  message   String
+  readAt    DateTime? @map("read_at") @db.Timestamptz(6)
+  createdAt DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, createdAt])
+  @@map("notifications")
 }

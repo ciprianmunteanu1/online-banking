@@ -4,6 +4,7 @@ import { RedisService } from '../redis/redis.service';
 import { CardStatus } from '@prisma/client';
 import { IssueCardDto } from './dto/issue-card.dto';
 import { VerifyRevealDto } from './dto/verify-reveal.dto';
+import { NotificationsService } from '../notifications/notifications.service';
 
 @Injectable()
 export class CardsService {
@@ -12,6 +13,7 @@ export class CardsService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly redis: RedisService,
+    private readonly notifications: NotificationsService,
   ) {}
 
   async getCards(userId: string) {
@@ -66,6 +68,13 @@ export class CardsService {
       },
     });
 
+    await this.notifications.create(
+      userId,
+      'CARD_BLOCKED',
+      'Card Blocked',
+      `Your card ending in ${card.maskedPan.slice(-4)} has been blocked.`
+    );
+
     return updatedCard;
   }
 
@@ -102,6 +111,13 @@ export class CardsService {
         metadata: { maskedPan: card.maskedPan },
       },
     });
+
+    await this.notifications.create(
+      userId,
+      'CARD_UNBLOCKED',
+      'Card Unblocked',
+      `Your card ending in ${card.maskedPan.slice(-4)} has been unblocked.`
+    );
 
     return updatedCard;
   }
@@ -157,6 +173,13 @@ export class CardsService {
       },
     });
 
+    await this.notifications.create(
+      userId,
+      'CARD_ISSUED',
+      'Card Issued',
+      `A new ${card.cardType.toLowerCase()} card ending in ${card.maskedPan.slice(-4)} has been issued.`
+    );
+
     return {
       id: card.id,
       maskedPan: card.maskedPan,
@@ -191,6 +214,13 @@ export class CardsService {
         metadata: { maskedPan: card.maskedPan },
       },
     });
+
+    await this.notifications.create(
+      userId,
+      'CARD_CLOSED',
+      'Card Closed',
+      `Your card ending in ${card.maskedPan.slice(-4)} has been permanently closed.`
+    );
 
     return { success: true };
   }

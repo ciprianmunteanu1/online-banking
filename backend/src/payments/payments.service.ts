@@ -143,6 +143,8 @@ function parseBeneficiaryCompletedPayload(
   return null;
 }
 
+import { NotificationsService } from '../notifications/notifications.service';
+
 @Injectable()
 export class PaymentsService {
   private readonly logger = new Logger(PaymentsService.name);
@@ -150,6 +152,7 @@ export class PaymentsService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly redis: RedisService,
+    private readonly notifications: NotificationsService,
   ) {}
 
   async runMockFraudCheck(
@@ -470,6 +473,13 @@ export class PaymentsService {
       },
     });
 
+    await this.notifications.create(
+      userId,
+      'PAYMENT_TRANSFER_POSTED',
+      'Transfer Successful',
+      `Your internal transfer of ${amountDecimal.toString()} ${currency} has been posted.`
+    );
+
     const amountOut = amountDecimal.toFixed(2);
     const body: TransferSuccessResponse = {
       transactionId: txn.id,
@@ -745,10 +755,16 @@ export class PaymentsService {
           amount: amountDecimal.toFixed(2),
           currency,
           internalBeneficiary,
-          idempotencyKey,
         },
       },
     });
+
+    await this.notifications.create(
+      userId,
+      'BENEFICIARY_TRANSFER_POSTED',
+      'Transfer Successful',
+      `Your transfer to ${beneficiary.displayName} of ${amountDecimal.toFixed(2)} ${currency} has been posted.`
+    );
 
     return {
       httpStatus: HttpStatus.CREATED,
