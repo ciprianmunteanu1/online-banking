@@ -1,8 +1,18 @@
 import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
-import { AccountStatus, KycStatus, TransactionStatus, TransactionType } from '@prisma/client';
+import { AccountStatus, KycStatus, Prisma, TransactionStatus, TransactionType } from '@prisma/client';
 import { AdminCreditDto } from './dto/admin-credit.dto';
 import { NotificationsService } from '../notifications/notifications.service';
+
+type AuditEventFilters = {
+  action?: string;
+  resourceType?: string;
+  actorUserId?: string;
+  from?: string;
+  to?: string;
+  page?: string;
+  limit?: string;
+};
 
 @Injectable()
 export class AdminService {
@@ -40,6 +50,61 @@ export class AdminService {
         },
       },
     });
+  }
+
+  async getAuditEvents(filters: AuditEventFilters) {
+    const page = this.parsePositiveInt(filters.page, 1, 'page');
+    const limit = Math.min(this.parsePositiveInt(filters.limit, 25, 'limit'), 100);
+    const where: Prisma.AuditEventWhereInput = {};
+
+    if (filters.action) where.action = filters.action;
+    if (filters.resourceType) where.resourceType = filters.resourceType;
+    if (filters.actorUserId) where.actorUserId = filters.actorUserId;
+
+    const createdAt: Prisma.DateTimeFilter = {};
+    if (filters.from) createdAt.gte = this.parseDate(filters.from, 'from');
+    if (filters.to) createdAt.lte = this.parseDate(filters.to, 'to');
+    if (createdAt.gte || createdAt.lte) where.createdAt = createdAt;
+
+    const [items, total] = await this.prisma.$transaction([
+      this.prisma.auditEvent.findMany({
+        where,
+        orderBy: { createdAt: 'desc' },
+        skip: (page - 1) * limit,
+        take: limit,
+        select: {
+          id: true,
+          actorUserId: true,
+          action: true,
+          resourceType: true,
+          resourceId: true,
+          ipAddress: true,
+          userAgent: true,
+          metadata: true,
+          createdAt: true,
+        },
+      }),
+      this.prisma.auditEvent.count({ where }),
+    ]);
+
+    return { items, page, limit, total };
+  }
+
+  private parsePositiveInt(value: string | undefined, fallback: number, label: string) {
+    if (!value) return fallback;
+    const parsed = Number(value);
+    if (!Number.isInteger(parsed) || parsed < 1) {
+      throw new BadRequestException(`${label} must be a positive integer`);
+    }
+    return parsed;
+  }
+
+  private parseDate(value: string, label: string) {
+    const parsed = new Date(value);
+    if (Number.isNaN(parsed.getTime())) {
+      throw new BadRequestException(`${label} must be a valid date`);
+    }
+    return parsed;
   }
 
   async updateKycStatus(adminUserId: string, customerId: string, status: KycStatus) {

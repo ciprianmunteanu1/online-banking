@@ -1,4 +1,4 @@
-import { Controller, Get, Patch, Param, Req, UseGuards, ParseUUIDPipe, Post, Body } from '@nestjs/common';
+import { Controller, Get, Patch, Param, Query, Req, UseGuards, ParseUUIDPipe, Post, Body } from '@nestjs/common';
 import { AdminService } from './admin.service';
 import { AdminCreditDto } from './dto/admin-credit.dto';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
@@ -18,6 +18,27 @@ export class AdminController {
   @Get('customers')
   getCustomers() {
     return this.adminService.getCustomers();
+  }
+
+  @Get('audit-events')
+  getAuditEvents(
+    @Query('action') action?: string,
+    @Query('resourceType') resourceType?: string,
+    @Query('actorUserId') actorUserId?: string,
+    @Query('from') from?: string,
+    @Query('to') to?: string,
+    @Query('page') page?: string,
+    @Query('limit') limit?: string,
+  ) {
+    return this.adminService.getAuditEvents({
+      action,
+      resourceType,
+      actorUserId,
+      from,
+      to,
+      page,
+      limit,
+    });
   }
 
   @Patch('customers/:id/verify')
