@@ -5,7 +5,7 @@ import { PaymentsService } from './payments.service';
 import { StepUpRequiredException } from './exceptions/step-up-required.exception';
 
 describe('PaymentsService mock fraud', () => {
-  it('rejects amounts strictly greater than 1000', async () => {
+  it('requires step-up for amounts strictly greater than 1000', async () => {
     const svc = new PaymentsService({
       idempotencyKey: { findUnique: async () => null }
     } as never, {
@@ -17,7 +17,7 @@ describe('PaymentsService mock fraud', () => {
     );
   });
 
-  it('allows amount equal to 1000', async () => {
+  it('allows amount equal to 1000 without step-up', async () => {
     const svc = new PaymentsService({
       idempotencyKey: { findUnique: async () => null }
     } as never, {
